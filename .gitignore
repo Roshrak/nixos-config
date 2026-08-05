@@ -1,0 +1,5 @@
+backup-*/
+*.bak*
+result
+result-*
+*.audio-backup

@@ -1,0 +1,31 @@
+# Noctalia v5 starts with sane defaults; these are only the important overrides.
+
+[storage]
+key_source = "secret-service"
+
+[shell]
+font_family = "JetBrainsMono Nerd Font"
+external_ip_enabled = false
+telemetry_enabled = false
+setup_wizard_enabled = true
+polkit_agent = true
+clipboard_enabled = true
+clipboard_keep_from_closed_apps = true
+
+[shell.panel]
+shadow = false
+launcher_placement = "floating"
+launcher_position = "center"
+control_center_placement = "attached"
+
+[shell.screenshot]
+save_to_file = true
+copy_to_clipboard = true
+freeze_screen = true
+
+[bar.default]
+shadow = false
+contact_shadow = false
+
+[dock]
+shadow = false
