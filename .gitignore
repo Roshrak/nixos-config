@@ -1,5 +1,7 @@
+
+*.audio-backup
 backup-*/
 *.bak*
+/hardware-configuration.nix
 result
 result-*
-*.audio-backup
