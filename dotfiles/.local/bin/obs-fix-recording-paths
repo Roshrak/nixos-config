@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+OUT="$HOME/Videos/OBS"
+mkdir -p "$OUT"
+
+set_ini_value() {
+  local file="$1"
+  local section="$2"
+  local key="$3"
+  local value="$4"
+  local tmp="${file}.path-fix.$$"
+
+  awk -v section="$section" -v key="$key" -v value="$value" '
+    BEGIN {
+      in_section = 0
+      section_found = 0
+      key_written = 0
+    }
+
+    /^\[[^]]+\][[:space:]]*$/ {
+      if (in_section && !key_written) {
+        print key "=" value
+        key_written = 1
+      }
+
+      wanted = "[" section "]"
+      in_section = ($0 == wanted)
+
+      if (in_section) {
+        section_found = 1
+        key_written = 0
+      }
+    }
+
+    {
+      if (in_section && $0 ~ ("^" key "=")) {
+        print key "=" value
+        key_written = 1
+        next
+      }
+
+      print
+    }
+
+    END {
+      if (in_section && !key_written) {
+        print key "=" value
+      }
+
+      if (!section_found) {
+        print ""
+        print "[" section "]"
+        print key "=" value
+      }
+    }
+  ' "$file" > "$tmp"
+
+  mv "$tmp" "$file"
+}
+
+shopt -s nullglob
+profiles=("$HOME/.config/obs-studio/basic/profiles/"*/basic.ini)
+
+for file in "${profiles[@]}"; do
+  cp -n "$file" "$file.before-recording-path-fix" 2>/dev/null || true
+
+  # Simple output mode.
+  set_ini_value "$file" "SimpleOutput" "FilePath" "$OUT"
+
+  # Advanced standard recording mode.
+  set_ini_value "$file" "AdvOut" "RecFilePath" "$OUT"
+
+  # Advanced custom FFmpeg output mode.
+  set_ini_value "$file" "AdvOut" "FFFilePath" "$OUT"
+done

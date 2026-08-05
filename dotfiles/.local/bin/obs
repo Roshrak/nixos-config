@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+"/home/aesc/.local/bin/obs-fix-recording-paths"
+exec "/run/current-system/sw/bin/obs" "$@"

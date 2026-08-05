@@ -1,0 +1,6 @@
+# Managed by setup-media-folders.sh
+[shell.screenshot]
+save_to_file = true
+directory = "/home/aesc/Pictures/Screenshots"
+filename_pattern = "screenshot_%Y%m%d_%H%M%S"
+copy_to_clipboard = true

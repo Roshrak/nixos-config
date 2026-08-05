@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=OBS Studio
+Comment=Free and Open Source Streaming/Recording Software
+Exec=/home/aesc/.local/bin/obs-safe %U
+Icon=com.obsproject.Studio
+Terminal=false
+Type=Application
+Categories=AudioVideo;Recorder;
+StartupNotify=true
