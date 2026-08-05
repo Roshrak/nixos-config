@@ -23,7 +23,7 @@
   boot.loader.systemd-boot = {
     enable = true;
     editor = false;
-    configurationLimit = 2;
+    configurationLimit = 5;
   };
   boot.loader.efi.canTouchEfiVariables = true;
   boot.kernelPackages = pkgs.linuxPackages_latest;
@@ -46,10 +46,23 @@
 
   # Mango compositor and a graphical login screen.
   programs.mango.enable = true;
-  services.displayManager.sddm = {
-    enable = true;
-    wayland.enable = true;
+  services.displayManager.sddm.enable = false;
+
+programs.noctalia-greeter = {
+  enable = true;
+
+  settings = {
+    appearance.hide_logo = true;
+    cursor = {
+      theme = "Bibata-Modern-Ice";
+      size = 24;
+      path = "${pkgs.bibata-cursors}/share/icons";
+    };
+
+    keyboard.layout = "us";
+    idle.timeout = 300;
   };
+};
   services.xserver.desktopManager.runXdgAutostartIfNone = true;
 
   # Noctalia supplies the bar, launcher, notifications, control center,
@@ -131,6 +144,7 @@
   ];
 
   programs.nix-ld.enable = true;
+  xdg.portal.enable = true;
   services.flatpak.enable = true;
 
   environment.systemPackages = with pkgs; [

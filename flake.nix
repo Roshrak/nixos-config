@@ -6,6 +6,10 @@
     mango.url = "github:mangowm/mango";
     noctalia.url = "github:noctalia-dev/noctalia/cachix";
     lotus.url = "github:LotusInputMethod/fcitx5-lotus";
+    noctalia-greeter = {
+      url = "github:noctalia-dev/noctalia-greeter";
+      inputs.nixpkgs.follows = "nixpkgs";
+    }; 
   };
 
   outputs = inputs@{ nixpkgs, mango, noctalia, ... }: {
@@ -16,6 +20,7 @@
         ./hardware-configuration.nix
         mango.nixosModules.mango
         noctalia.nixosModules.default
+        inputs.noctalia-greeter.nixosModules.default
         inputs.lotus.nixosModules.fcitx5-lotus
         ./apps-and-lotus.nix
         ./configuration.nix
