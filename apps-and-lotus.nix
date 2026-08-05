@@ -8,6 +8,10 @@
   };
 
   environment.systemPackages = with pkgs; [
+    fzf
+    gcc
+    tree-sitter
+    lazygit
     chromium
     bibata-cursors
     xdg-user-dirs

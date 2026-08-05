@@ -1,0 +1,484 @@
+[1m[95mNIXOS + MANGO PERSONAL COMMAND GUIDE[0m
+[94mFor this laptop:[0m
+[94m  User: aesc[0m
+[94m  Flake output: tonelico[0m
+[94m  Main NixOS folder: /etc/nixos[0m
+[94m  GitHub backup folder: ~/nixos-config[0m
+
+[2m[96m============================================================[0m
+[1m[96m1. OPEN AND EDIT YOUR CONFIG FILES[0m
+[2m[96m============================================================[0m
+
+[1m[93mMain NixOS settings:[0m
+[92m  sudo nano /etc/nixos/configuration.nix[0m
+
+[1m[93mApps, Steam, Prism, Lotus, Chromium, cursor:[0m
+[92m  sudo nano /etc/nixos/apps-and-lotus.nix[0m
+
+[1m[93mFlake inputs and imported modules:[0m
+[92m  sudo nano /etc/nixos/flake.nix[0m
+
+[1m[93mMachine mounts, UUIDs, and hardware modules:[0m
+[92m  sudo nano /etc/nixos/hardware-configuration.nix[0m
+
+[1m[91mIMPORTANT:[0m
+Normally do not edit hardware-configuration.nix by hand.
+Generate a fresh one after reinstalling or changing partitions.
+
+[1m[93mMango window manager:[0m
+[92m  nano ~/.config/mango/config.conf[0m
+
+[1m[93mNoctalia shell:[0m
+[92m  nano ~/.config/noctalia/config.toml[0m
+
+[1m[93mKitty terminal:[0m
+[92m  nano ~/.config/kitty/kitty.conf[0m
+
+[1m[93mFcitx5:[0m
+[92m  fcitx5-configtool[0m
+
+[1m[93mView all NixOS config files:[0m
+[92m  ls -lah /etc/nixos[0m
+
+[1m[93mView your backed-up Git repository:[0m
+[92m  ls -lah ~/nixos-config[0m
+
+[1m[93mNano controls:[0m
+  Save: Ctrl+O, Enter
+  Exit: Ctrl+X
+  Search: Ctrl+W
+
+
+[2m[96m============================================================[0m
+[1m[96m2. APPLY CONFIG CHANGES[0m
+[2m[96m============================================================[0m
+
+[1m[93mCheck/build without activating:[0m
+[92m  sudo nixos-rebuild build --flake /etc/nixos#tonelico[0m
+
+[1m[93mApply immediately and add a boot generation:[0m
+[92m  sudo nixos-rebuild switch --flake /etc/nixos#tonelico[0m
+
+[1m[93mBuild for the next boot without changing the running system:[0m
+[92m  sudo nixos-rebuild boot --flake /etc/nixos#tonelico[0m
+
+[1m[93mTest temporarily without adding a boot generation:[0m
+[92m  sudo nixos-rebuild test --flake /etc/nixos#tonelico[0m
+
+[1m[93mReload Mango after editing its config:[0m
+[92m  mango -c ~/.config/mango/config.conf -p[0m
+[92m  mmsg dispatch reload_config[0m
+
+[1m[93mRestart Noctalia if its panel becomes stuck:[0m
+[92m  pkill -x noctalia[0m
+[92m  sleep 1[0m
+[92m  noctalia --daemon[0m
+
+
+[2m[96m============================================================[0m
+[1m[96m3. INSTALL OR REMOVE APPLICATIONS[0m
+[2m[96m============================================================[0m
+
+[1m[93mSearch for a package:[0m
+[92m  nix search nixpkgs PACKAGE_NAME[0m
+
+[1m[93mOpen your app list:[0m
+[92m  sudo nano /etc/nixos/apps-and-lotus.nix[0m
+
+[1m[93mAdd the package inside:[0m
+[92m  environment.systemPackages = with pkgs; [[0m
+    package-name
+[92m  ];[0m
+
+[1m[93mApply:[0m
+[92m  sudo nixos-rebuild switch --flake /etc/nixos#tonelico[0m
+
+[1m[93mRemove an app:[0m
+  Delete its package line, save, then rebuild again.
+
+[1m[93mTemporarily run an app without permanently installing it:[0m
+[92m  nix shell nixpkgs#PACKAGE_NAME -c COMMAND_NAME[0m
+
+
+
+[2m[96m============================================================[0m
+[1m[96m3A. LAZYVIM INSTALLATION AND USE[0m
+[2m[96m============================================================[0m
+
+[1m[93mLazyVim is your Neovim configuration. The NixOS package list should provide:[0m
+  neovim
+  git
+  lazygit
+  tree-sitter
+  gcc
+  curl
+  fzf
+  ripgrep
+  fd
+
+[1m[93mInstall LazyVim automatically with the supplied helper:[0m
+[92m  chmod +x ~/Downloads/install-lazyvim-and-backup.sh[0m
+[92m  ~/Downloads/install-lazyvim-and-backup.sh[0m
+
+[1m[93mOpen LazyVim:[0m
+  nvim
+
+[1m[93mOpen a file:[0m
+[92m  nvim FILE_NAME[0m
+
+[1m[93mOpen the current directory:[0m
+[92m  nvim .[0m
+
+[1m[93mRun LazyVim's health check from inside Neovim:[0m
+[92m  :LazyHealth[0m
+
+[1m[93mUseful LazyVim controls:[0m
+  Space              Leader key / command menu
+  Space, f, f        Find files
+  Space, s, g        Search text with grep
+  Space, e           File explorer
+  Space, g, g        Lazygit
+[92m  :q                 Close the current view[0m
+[92m  :qa                Close Neovim[0m
+[92m  :w                 Save[0m
+[92m  :wq                Save and quit[0m
+
+[1m[93mLazyVim files:[0m
+[92m  ~/.config/nvim[0m
+
+[1m[93mLazyVim plugin data and cache:[0m
+[92m  ~/.local/share/nvim[0m
+[92m  ~/.local/state/nvim[0m
+[92m  ~/.cache/nvim[0m
+
+[1m[93mBack up the LazyVim configuration to GitHub:[0m
+[1m[93m  Copy ~/.config/nvim into:[0m
+[92m  ~/nixos-config/dotfiles/.config/nvim[0m
+
+[1m[91mDo not upload ~/.local/share/nvim or ~/.cache/nvim.[0m
+They contain downloaded/generated data that LazyVim can recreate.
+
+[2m[96m============================================================[0m
+[1m[96m4. UPDATE NIXOS, APPS, MANGO, NOCTALIA, AND LOTUS[0m
+[2m[96m============================================================[0m
+
+[1m[93mUpdate all flake inputs and apply:[0m
+[92m  cd /etc/nixos[0m
+[92m  sudo nix flake update[0m
+[92m  sudo nixos-rebuild switch --flake /etc/nixos#tonelico[0m
+
+[1m[93mRecommended safer update:[0m
+[92m  cd /etc/nixos[0m
+[92m  sudo cp flake.lock flake.lock.before-update[0m
+[92m  sudo nix flake update[0m
+[92m  sudo nixos-rebuild build --flake /etc/nixos#tonelico[0m
+[92m  sudo nixos-rebuild switch --flake /etc/nixos#tonelico[0m
+
+[1m[93mAfter a kernel or firmware update:[0m
+[92m  reboot[0m
+
+[1m[93mSee what inputs are locked:[0m
+[92m  nix flake metadata /etc/nixos[0m
+
+
+[2m[96m============================================================[0m
+[1m[96m5. ROLLBACK AND RECOVERY[0m
+[2m[96m============================================================[0m
+
+[1m[93mReturn to the previous system generation:[0m
+[92m  sudo nixos-rebuild switch --rollback[0m
+
+[1m[93mList generations:[0m
+[92m  sudo nixos-rebuild list-generations[0m
+
+[1m[93mAt startup:[0m
+  Open the systemd-boot menu and select an older NixOS generation.
+
+[1m[93mCheck failed services:[0m
+[92m  systemctl --failed[0m
+
+[1m[93mShow serious errors from the current boot:[0m
+[92m  journalctl -b -p err..alert[0m
+
+[1m[93mShow the previous boot:[0m
+[92m  journalctl -b -1[0m
+
+[1m[93mRestore the flake lock saved before an update:[0m
+[92m  cd /etc/nixos[0m
+[92m  sudo cp flake.lock.before-update flake.lock[0m
+[92m  sudo nixos-rebuild switch --flake /etc/nixos#tonelico[0m
+
+
+[2m[96m============================================================[0m
+[1m[96m6. KEEP ONLY FIVE NIXOS GENERATIONS[0m
+[2m[96m============================================================[0m
+
+ONE-TIME: make the boot menu keep at most five NixOS entries.
+
+[1m[93mYour starter originally used:[0m
+[92m  configurationLimit = 2;[0m
+
+[1m[93mChange it to 5 automatically:[0m
+[92m  sudo sed -i -E \[0m
+    's/configurationLimit = [0-9]+;/configurationLimit = 5;/' \
+[92m    /etc/nixos/configuration.nix[0m
+
+[1m[93mConfirm:[0m
+[92m  grep -n 'configurationLimit' /etc/nixos/configuration.nix[0m
+
+[1m[93mApply:[0m
+[92m  sudo nixos-rebuild switch --flake /etc/nixos#tonelico[0m
+
+After confirming the current system works, keep the latest five
+[1m[93msystem-profile generations:[0m
+[92m  sudo nix-env \[0m
+    --profile /nix/var/nix/profiles/system \
+    --delete-generations +5
+
+[1m[93mFree store paths that no remaining generation uses:[0m
+[92m  sudo nix-store --gc[0m
+
+[1m[93mCheck what remains:[0m
+[92m  sudo nixos-rebuild list-generations[0m
+
+[1m[91mIMPORTANT:[0m
+Run generation deletion only after confirming the newest system works.
+Keeping five boot entries and five system generations gives you recovery
+choices without keeping unlimited old versions.
+
+
+[2m[96m============================================================[0m
+[1m[96m7. UPLOAD YOUR CURRENT WORKING CONFIG TO GITHUB[0m
+[2m[96m============================================================[0m
+
+Use this only after a rebuild/update works correctly.
+
+[1m[93mFirst enter the local repository:[0m
+[92m  cd ~/nixos-config[0m
+
+[1m[93mDownload remote changes without applying them:[0m
+[92m  git fetch[0m
+
+[1m[93mDownload and apply remote changes:[0m
+[92m  git pull --rebase[0m
+
+[1m[93mCopy the current NixOS files:[0m
+[92m  sudo cp -a \[0m
+[92m    /etc/nixos/flake.nix \[0m
+[92m    /etc/nixos/flake.lock \[0m
+[92m    /etc/nixos/configuration.nix \[0m
+[92m    /etc/nixos/hardware-configuration.nix \[0m
+[92m    /etc/nixos/apps-and-lotus.nix \[0m
+[92m    ~/nixos-config/[0m
+
+[1m[93mReturn ownership to your user:[0m
+[92m  sudo chown -R "$USER":"$(id -gn)" ~/nixos-config[0m
+
+[1m[93mRefresh your desktop dotfiles:[0m
+[92m  rm -rf ~/nixos-config/dotfiles/.config/{mango,kitty,noctalia,fcitx5,nvim}[0m
+[92m  mkdir -p ~/nixos-config/dotfiles/.config[0m
+
+[92m  for APP in mango kitty noctalia fcitx5 nvim; do[0m
+[92m    if [ -d "$HOME/.config/$APP" ]; then[0m
+[92m      cp -a "$HOME/.config/$APP" \[0m
+[92m        ~/nixos-config/dotfiles/.config/[0m
+[92m    fi[0m
+  done
+
+[1m[93mOptionally save your default-app associations:[0m
+[92m  if [ -f "$HOME/.config/mimeapps.list" ]; then[0m
+[92m    cp -a "$HOME/.config/mimeapps.list" \[0m
+[92m      ~/nixos-config/dotfiles/.config/[0m
+[92m  fi[0m
+
+[1m[93mReview changes:[0m
+[92m  cd ~/nixos-config[0m
+[92m  git status[0m
+[92m  git diff[0m
+
+[1m[93mCommit and upload:[0m
+[92m  git add -A[0m
+[92m  git status --short[0m
+
+[92m  if git diff --cached --quiet; then[0m
+[92m    echo "No new configuration changes to upload."[0m
+[92m  else[0m
+[92m    git commit -m "Working NixOS config $(date +%F-%H%M)"[0m
+[92m    git push[0m
+[92m  fi[0m
+
+[1m[93mOpen the repository in your browser:[0m
+[92m  gh repo view --web[0m
+
+[1m[93mShow the exact GitHub destination:[0m
+[92m  git remote -v[0m
+
+[1m[91mIMPORTANT:[0m
+[92mgit push uploads only committed files inside ~/nixos-config.[0m
+[92mIt does not automatically copy changes from /etc/nixos or ~/.config.[0m
+
+
+[2m[96m============================================================[0m
+[1m[96m8. RESTORE EVERYTHING AFTER A MINIMAL NO-DESKTOP REINSTALL[0m
+[2m[96m============================================================[0m
+
+Use this after installing and booting a basic/minimal NixOS system.
+
+[1m[96mA. Log in at the text console and get temporary Git tools:[0m
+
+[92m  nix-shell -p git gh[0m
+
+[1m[96mB. Sign in to GitHub:[0m
+
+[92m  gh auth login --hostname github.com --git-protocol https --web[0m
+
+Follow the device-code/browser instructions.
+
+[1m[96mC. Clone your private repository:[0m
+
+[92m  rm -rf /tmp/nixos-config[0m
+[92m  gh repo clone nixos-config /tmp/nixos-config[0m
+
+The owner can be omitted because GitHub CLI uses the authenticated account.
+
+[1m[96mD. ALWAYS KEEP THE NEW INSTALL'S HARDWARE FILE.[0m
+
+Use the newly generated hardware-configuration.nix from the new installation.
+[1m[91mDo not replace it with the copy from GitHub, even on the same laptop.[0m
+
+[1m[93mWhy:[0m
+  - A new partition or format normally creates new filesystem UUIDs.
+  - The detected initrd modules and filesystems belong to the new install.
+  - The old GitHub copy is useful only as a reference.
+
+[1m[93mThe safest rule is:[0m
+  Restore every saved config file EXCEPT hardware-configuration.nix.
+  Keep the fresh hardware-configuration.nix generated by the installer.
+
+[1m[93mSave the fresh hardware file before copying the rest of the repository:[0m
+
+[92m  sudo cp \[0m
+[92m    /etc/nixos/hardware-configuration.nix \[0m
+[92m    /tmp/hardware-configuration.new.nix[0m
+
+[1m[96mE. Copy your saved configuration:[0m
+
+[92m  sudo cp -a \[0m
+[92m    /tmp/nixos-config/flake.nix \[0m
+[92m    /tmp/nixos-config/flake.lock \[0m
+[92m    /tmp/nixos-config/configuration.nix \[0m
+[92m    /tmp/nixos-config/apps-and-lotus.nix \[0m
+[92m    /etc/nixos/[0m
+
+[1m[93mRestore the newly generated hardware file:[0m
+[92m  sudo cp \[0m
+[92m    /tmp/hardware-configuration.new.nix \[0m
+[92m    /etc/nixos/hardware-configuration.nix[0m
+
+[1m[96mF. Build your complete Mango + Noctalia desktop:[0m
+
+[92m  sudo nixos-rebuild switch \[0m
+[92m    --flake /etc/nixos#tonelico \[0m
+    --option experimental-features "nix-command flakes"
+
+[1m[93mThis configuration should recreate:[0m
+  Mango
+  Noctalia
+  Noctalia Greeter
+  Chromium
+  Kitty
+  Steam
+  Prism Launcher
+  OBS
+  Discord
+  Obsidian
+  Lotus
+[92m  LazyVim (after restoring ~/.config/nvim)[0m
+  your declared drivers and services
+
+[1m[96mG. Put the Git repository and dotfiles into aesc's home:[0m
+
+[92m  sudo rm -rf /home/aesc/nixos-config[0m
+[92m  sudo cp -a /tmp/nixos-config /home/aesc/nixos-config[0m
+
+[92m  sudo mkdir -p /home/aesc/.config[0m
+[92m  sudo cp -a \[0m
+[92m    /tmp/nixos-config/dotfiles/.config/. \[0m
+[92m    /home/aesc/.config/[0m
+
+[92m  sudo chown -R \[0m
+    aesc:"$(id -gn aesc)" \
+[92m    /home/aesc/nixos-config \[0m
+[92m    /home/aesc/.config[0m
+
+[1m[96mH. Reboot:[0m
+
+[92m  sudo reboot[0m
+
+At Noctalia Greeter, choose Mango if needed and log in as aesc.
+
+[1m[93mIMPORTANT REINSTALL NOTES:[0m
+[1m[96m  1. Always keep the newly generated hardware-configuration.nix; never overwrite it with the GitHub copy.[0m
+[1m[96m  2. Do not blindly restore old disk UUIDs after repartitioning.[0m
+[1m[96m  3. Keep system.stateVersion at the value already saved in your config.[0m
+[1m[96m  4. This repository restores declared programs and selected settings.[0m
+[1m[96m  5. It does not restore personal documents, browser profiles, games,[0m
+     passwords, Secret Service contents, or files that were never committed.
+
+
+[2m[96m============================================================[0m
+[1m[96m9. USEFUL CHECKS[0m
+[2m[96m============================================================[0m
+
+[1m[93mDisk space:[0m
+[92m  df -h[0m
+[92m  sudo du -sh /nix/store[0m
+
+[1m[93mCurrent system:[0m
+[92m  readlink -f /run/current-system[0m
+
+[1m[93mAudio:[0m
+[92m  wpctl status[0m
+[92m  pavucontrol[0m
+
+[1m[93mGraphics:[0m
+[92m  glxinfo -B[0m
+[92m  vulkaninfo --summary[0m
+[92m  vainfo[0m
+
+[1m[93mNetwork:[0m
+[92m  nmcli device status[0m
+
+[1m[93mMango:[0m
+[92m  echo "$XDG_CURRENT_DESKTOP"[0m
+[92m  mango -c ~/.config/mango/config.conf -p[0m
+
+[1m[93mNoctalia:[0m
+[92m  noctalia msg status[0m
+
+[1m[93mLazyVim:[0m
+[92m  nvim --version[0m
+  nvim
+  Then run :LazyHealth inside Neovim.
+
+[1m[93mGitHub:[0m
+[92m  cd ~/nixos-config[0m
+[92m  gh auth status[0m
+[92m  git status[0m
+[92m  git remote -v[0m
+
+
+[2m[96m============================================================[0m
+[1m[96m10. SIMPLE NORMAL ROUTINE[0m
+[2m[96m============================================================[0m
+
+[1m[93mAfter changing configuration:[0m
+[92m  sudo nixos-rebuild switch --flake /etc/nixos#tonelico[0m
+
+[1m[92mAfter a successful update:[0m
+[1m[96m  1. Confirm apps, audio, Mango, and Noctalia work.[0m
+[1m[96m  2. Keep the latest five generations.[0m
+[1m[96m  3. Copy the working config into ~/nixos-config.[0m
+[1m[96m  4. Commit and push it to GitHub.[0m
+
+[1m[91mNever delete old generations before testing the newest one.[0m
