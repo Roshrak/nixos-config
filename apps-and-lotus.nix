@@ -8,6 +8,7 @@
   };
 
   environment.systemPackages = with pkgs; [
+    inputs.areofyl-fetch.packages.${pkgs.stdenv.hostPlatform.system}.default
     fzf
     gcc
     tree-sitter
