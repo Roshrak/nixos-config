@@ -8,6 +8,7 @@
   };
 
   environment.systemPackages = with pkgs; [
+    gh
     inputs.areofyl-fetch.packages.${pkgs.stdenv.hostPlatform.system}.default
     fzf
     gcc

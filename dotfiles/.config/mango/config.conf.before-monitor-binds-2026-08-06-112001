@@ -174,10 +174,3 @@ axisbind =SUPER,UP,viewtoleft
 axisbind =SUPER,DOWN,viewtoright
 cursor_theme =Bibata-Modern-Ice
 cursor_size =24
-
-# Move the focused window to another physical monitor.
-# The final 1 keeps the same workspace/tag.
-bind=SUPER+SHIFT,Left,tagmon,left,1
-bind=SUPER+SHIFT,Right,tagmon,right,1
-bind=SUPER+SHIFT,Up,tagmon,up,1
-bind=SUPER+SHIFT,Down,tagmon,down,1

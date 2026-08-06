@@ -1,0 +1,34 @@
+MANGO + NOCTALIA KEYBINDS
+
+Super + Enter       Kitty terminal
+Super + Space       Noctalia launcher
+Super + S           Control center
+Super + ,           Noctalia settings
+Super + E           Nautilus file manager
+Super + Z           Chromium
+Super + V           Clipboard history
+Super + Escape      Lock screen
+Super + Shift + E   Power/session menu
+Print               Region screenshot
+Alt + Tab           Noctalia window switcher
+
+Super + Q           Close window
+Super + F           Full screen
+Super + Shift + F   Toggle floating
+Super + N           Switch tiling layout
+Super + R           Reload Mango config
+Super + Shift + M   Exit Mango
+
+Super + H/J/K/L     Focus left/down/up/right
+Super + Shift + H/J/K/L  Swap window
+Super + 1..9        Switch tag
+Super + Shift + 1..9 Move window to tag
+Super + Left/Right  Previous/next tag
+
+After first login:
+  mango -c ~/.config/mango/config.conf -p
+  noctalia msg status
+  fcitx5-configtool
+
+Super + Shift + Enter  Promote/swap focused window with the main window
+Super + mouse wheel    Previous/next occupied workspace
