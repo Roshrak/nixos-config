@@ -5,3 +5,4 @@ backup-*/
 /hardware-configuration.nix
 result
 result-*
+/nixos/hardware-configuration.nix

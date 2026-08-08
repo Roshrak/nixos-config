@@ -29,15 +29,23 @@ shadows_position_x=2
 shadows_position_y=2
 shadowscolor=0x000000ff
 
+animations=1
+animation_type_open=slide
+animation_type_close=slide
 animation_duration_move=300
+animation_duration_open=250
 animation_duration_tag=250
+animation_duration_close=250
+animation_curve_open=0.46,1.0,0.29,1
 animation_curve_move=0.46,1.0,0.29,1
 animation_curve_tag=0.46,1.0,0.29,1
+animation_curve_close=0.08,0.92,0,1
 
 # Laptop input
 tap_to_click=1
 tap_and_drag=1
 disable_while_typing=1
+trackpad_natural_scrolling=0
 mouse_natural_scrolling=0
 xkb_rules_layout=us
 repeat_rate=30
@@ -169,47 +177,7 @@ cursor_size =24
 
 # Move the focused window to another physical monitor.
 # The final 1 keeps the same workspace/tag.
-bind=SUPER+SHIFT,Up,tagmon,up,1
-bind=SUPER+SHIFT,Down,tagmon,down,1
-
-# Mango window overview
-ov_tab_mode=0
-overviewgappi=10
-overviewgappo=30
-
-bind=SUPER,o,toggleoverview
-
-# Four-finger swipe up/down opens or closes overview
-gesturebind=none,up,4,toggleoverview
-gesturebind=none,down,4,toggleoverview
-animations=1
-animation_type_open=slide
-animation_type_close=slide
-animation_fade_in=1
-animation_fade_out=1
-fadein_begin_opacity=0.55
-fadeout_begin_opacity=0.85
-animation_duration_open=260
-animation_duration_close=220
-
-# ============================================================
-# Trackpad scrolling + 3-finger workspace/monitor gestures
-# ============================================================
-
-# Reverse trackpad scrolling only.
-# External mouse scrolling is unaffected.
-trackpad_natural_scrolling=2
-
-# 3-finger horizontal swipe = switch workspace/tag.
-gesturebind=none,left,3,viewtoright
-gesturebind=none,right,3,viewtoleft
-
-# Hold Super+Shift while 3-finger swiping =
-# move focused window to the physical monitor in that direction.
-# Final "1" keeps the window on its current tag.
-gesturebind=SUPER+SHIFT,left,3,tagmon,left,1
-gesturebind=SUPER+SHIFT,right,3,tagmon,right,1
-
-# Keyboard equivalent.
 bind=SUPER+SHIFT,Left,tagmon,left,1
 bind=SUPER+SHIFT,Right,tagmon,right,1
+bind=SUPER+SHIFT,Up,tagmon,up,1
+bind=SUPER+SHIFT,Down,tagmon,down,1
