@@ -201,34 +201,15 @@ animation_duration_close=220
 trackpad_natural_scrolling=2
 
 # 3-finger horizontal swipe = switch workspace/tag.
+gesturebind=none,left,3,viewtoright
+gesturebind=none,right,3,viewtoleft
 
 # Hold Super+Shift while 3-finger swiping =
 # move focused window to the physical monitor in that direction.
 # Final "1" keeps the window on its current tag.
+gesturebind=SUPER+SHIFT,left,3,tagmon,left,1
+gesturebind=SUPER+SHIFT,right,3,tagmon,right,1
 
 # Keyboard equivalent.
 bind=SUPER+SHIFT,Left,tagmon,left,1
 bind=SUPER+SHIFT,Right,tagmon,right,1
-
-# ============================================================
-# 3-finger workspace/window gestures
-# ============================================================
-
-# Normal:
-# swipe left  -> workspace right
-# swipe right -> workspace left
-gesturebind=none,left,3,viewtoright
-gesturebind=none,right,3,viewtoleft
-
-# Super+Shift:
-# same direction as normal gesture, but MOVE focused window
-gesturebind=SUPER+SHIFT,left,3,tagtoright
-gesturebind=SUPER+SHIFT,right,3,tagtoleft
-
-# Super+Shift+Alt:
-# move focused window between physical monitors
-gesturebind=SUPER+SHIFT+ALT,left,3,tagmon,left,1
-gesturebind=SUPER+SHIFT+ALT,right,3,tagmon,right,1
-
-# Fcitx5 input method - start automatically every Mango login
-exec-once=fcitx5 -d

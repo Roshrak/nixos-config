@@ -229,6 +229,3 @@ gesturebind=SUPER+SHIFT,right,3,tagtoleft
 # move focused window between physical monitors
 gesturebind=SUPER+SHIFT+ALT,left,3,tagmon,left,1
 gesturebind=SUPER+SHIFT+ALT,right,3,tagmon,right,1
-
-# Fcitx5 input method - start automatically every Mango login
-exec-once=fcitx5 -d

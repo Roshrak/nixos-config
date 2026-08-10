@@ -10,7 +10,6 @@
   environment.systemPackages = with pkgs; [
     zenity
     gh
-    inputs.areofyl-fetch.packages.${pkgs.stdenv.hostPlatform.system}.default
     fzf
     gcc
     tree-sitter

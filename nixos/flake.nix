@@ -6,7 +6,6 @@
     mango.url = "github:mangowm/mango";
     noctalia.url = "github:noctalia-dev/noctalia/cachix";
     lotus.url = "github:LotusInputMethod/fcitx5-lotus";
-    areofyl-fetch.url = "github:areofyl/fetch";
     noctalia-greeter = {
       url = "github:noctalia-dev/noctalia-greeter";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -24,6 +23,7 @@
         inputs.noctalia-greeter.nixosModules.default
         inputs.lotus.nixosModules.fcitx5-lotus
         ./apps-and-lotus.nix
+        ./windows-vm.nix
         ./configuration.nix
       ];
     };
