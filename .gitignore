@@ -6,3 +6,16 @@ backup-*/
 result
 result-*
 /nixos/hardware-configuration.nix
+/result
+/result-*
+*.pem
+*.key
+*.p12
+*.pfx
+.env
+.env.*
+/nixos/result
+/nixos/result-*
+*.before-*
+*.bak
+*.bak.*
