@@ -1,0 +1,248 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROFILE_ROOT="$HOME/.local/share/desktop-look-toggle"
+STATE_FILE="$PROFILE_ROOT/active"
+
+MANGO_LIVE="$HOME/.config/mango/config.conf"
+MANGO_DIR="$HOME/.config/mango"
+MANGO_INCLUDE="$HOME/.config/mango/look-toggle.conf"
+SOURCE_LINE='source-optional=~/.config/mango/look-toggle.conf'
+
+NOCTALIA_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/noctalia"
+NOCTALIA_LIVE="$NOCTALIA_DIR/settings.toml"
+
+mkdir -p \
+    "$PROFILE_ROOT/original" \
+    "$PROFILE_ROOT/dwm" \
+    "$MANGO_DIR" \
+    "$NOCTALIA_DIR"
+
+
+# --------------------------------------------------
+# Make sure the toggle keybind survives in both looks
+# --------------------------------------------------
+
+ensure_toggle_source() {
+    local file="$1"
+
+    if [ -f "$file" ] && ! grep -Fqx "$SOURCE_LINE" "$file"; then
+        printf '\n# Persistent desktop-look toggle\n%s\n' \
+            "$SOURCE_LINE" >> "$file"
+    fi
+}
+
+
+# --------------------------------------------------
+# Get active profile
+# --------------------------------------------------
+
+current_profile() {
+    local current
+
+    current="$(cat "$STATE_FILE" 2>/dev/null || true)"
+
+    case "$current" in
+        original|dwm)
+            printf '%s\n' "$current"
+            ;;
+        *)
+            # Your current setup was created while DWM was active.
+            printf '%s\n' "dwm"
+            ;;
+    esac
+}
+
+
+# --------------------------------------------------
+# SAVE live config into current profile
+#
+# This is the important new part.
+# --------------------------------------------------
+
+save_profile() {
+    local profile="$1"
+    local dir="$PROFILE_ROOT/$profile"
+
+    mkdir -p "$dir"
+
+    if [ ! -f "$MANGO_LIVE" ]; then
+        echo "ERROR: Mango config missing:"
+        echo "  $MANGO_LIVE" >&2
+        exit 1
+    fi
+
+    if [ ! -f "$NOCTALIA_LIVE" ]; then
+        echo "ERROR: Noctalia settings missing:"
+        echo "  $NOCTALIA_LIVE" >&2
+        exit 1
+    fi
+
+    # Ensure the shared keybind remains present before saving.
+    ensure_toggle_source "$MANGO_LIVE"
+
+    # Atomic-ish profile updates.
+    local mango_tmp
+    local noctalia_tmp
+
+    mango_tmp="$(mktemp "$dir/.mango-save.XXXXXX")"
+    noctalia_tmp="$(mktemp "$dir/.noctalia-save.XXXXXX")"
+
+    cp -a "$MANGO_LIVE" "$mango_tmp"
+    cp -a "$NOCTALIA_LIVE" "$noctalia_tmp"
+
+    mv -f "$mango_tmp" "$dir/mango.conf"
+    mv -f "$noctalia_tmp" "$dir/noctalia-settings.toml"
+
+    echo "Saved current $profile profile."
+}
+
+
+# --------------------------------------------------
+# LOAD profile into live configuration
+# --------------------------------------------------
+
+load_profile() {
+    local profile="$1"
+    local dir="$PROFILE_ROOT/$profile"
+
+    local mango_profile="$dir/mango.conf"
+    local noctalia_profile="$dir/noctalia-settings.toml"
+
+    if [ ! -f "$mango_profile" ]; then
+        echo "ERROR: Missing profile:"
+        echo "  $mango_profile" >&2
+        exit 1
+    fi
+
+    if [ ! -f "$noctalia_profile" ]; then
+        echo "ERROR: Missing profile:"
+        echo "  $noctalia_profile" >&2
+        exit 1
+    fi
+
+    ensure_toggle_source "$mango_profile"
+
+    # -----------------------------
+    # Noctalia: atomic replacement
+    # -----------------------------
+
+    local ntmp
+    ntmp="$(mktemp "$NOCTALIA_DIR/.look-switch.XXXXXX.toml")"
+
+    cp -a "$noctalia_profile" "$ntmp"
+    mv -f "$ntmp" "$NOCTALIA_LIVE"
+
+
+    # -----------------------------
+    # Mango: atomic replacement
+    # -----------------------------
+
+    local mtmp
+    mtmp="$(mktemp "$MANGO_DIR/.look-switch.XXXXXX.conf")"
+
+    cp -a "$mango_profile" "$mtmp"
+
+    ensure_toggle_source "$mtmp"
+
+    mv -f "$mtmp" "$MANGO_LIVE"
+
+
+    printf '%s\n' "$profile" > "$STATE_FILE"
+
+    # Reload Mango after complete config is in place.
+    if command -v mmsg >/dev/null 2>&1; then
+        mmsg dispatch reload_config >/dev/null 2>&1 || true
+    fi
+
+    case "$profile" in
+        dwm)
+            label="Bread / DWM"
+            ;;
+        original)
+            label="Original"
+            ;;
+    esac
+
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send \
+            -a "Desktop Look" \
+            "Desktop look: $label" \
+            "Previous profile saved automatically."
+    fi
+
+    echo "Loaded: $label"
+}
+
+
+# --------------------------------------------------
+# SAVE current, THEN switch
+# --------------------------------------------------
+
+switch_to() {
+    local target="$1"
+    local current
+
+    current="$(current_profile)"
+
+    if [ "$current" = "$target" ]; then
+        # Still save, because user may have edited it.
+        save_profile "$current"
+        echo "Already using: $current"
+        return
+    fi
+
+    echo "Saving $current before switching..."
+    save_profile "$current"
+
+    echo "Loading $target..."
+    load_profile "$target"
+}
+
+
+case "${1:-toggle}" in
+
+    toggle)
+        current="$(current_profile)"
+
+        if [ "$current" = "dwm" ]; then
+            switch_to original
+        else
+            switch_to dwm
+        fi
+        ;;
+
+    dwm|bread)
+        switch_to dwm
+        ;;
+
+    original|old)
+        switch_to original
+        ;;
+
+    save)
+        current="$(current_profile)"
+        save_profile "$current"
+
+        if command -v notify-send >/dev/null 2>&1; then
+            notify-send \
+                -a "Desktop Look" \
+                "Saved $current look" \
+                "Current Mango + Noctalia settings stored."
+        fi
+        ;;
+
+    status)
+        echo "Active profile: $(current_profile)"
+        ;;
+
+    *)
+        echo "Usage:"
+        echo "  toggle-desktop-look"
+        echo "  toggle-desktop-look dwm"
+        echo "  toggle-desktop-look original"
+        echo "  toggle-desktop-look save"
+        echo "  toggle-desktop-look status"
+        exit 2
+        ;;
+esac

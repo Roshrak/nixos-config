@@ -33,22 +33,22 @@ IMPORTANT HARDWARE RULE
   settings before switching to the restored configuration.
 
 ======================================================================
-0. THE TWO FILES I USE MOST
+0. THE ONE SCRIPT I USE MOST
 ======================================================================
 
 A. Full system update + tests + GitHub upload:
-  ~/Downloads/update-system-and-push-v2.sh
+  ~/Downloads/update-system-and-push-v3.1.sh
 
 Run:
-  chmod +x ~/Downloads/update-system-and-push-v2.sh
-  ~/Downloads/update-system-and-push-v2.sh
+  chmod +x ~/Downloads/update-system-and-push-v3.1.sh
+  ~/Downloads/update-system-and-push-v3.1.sh
 
 B. GitHub backup only, without updating NixOS:
-  ~/Downloads/sync-config-to-github.sh
+  ~/Downloads/update-system-and-push-v3.1.sh --sync-only
 
 Run:
-  chmod +x ~/Downloads/sync-config-to-github.sh
-  ~/Downloads/sync-config-to-github.sh
+  chmod +x ~/Downloads/update-system-and-push-v3.1.sh --sync-only
+  ~/Downloads/update-system-and-push-v3.1.sh --sync-only
 
 
 ======================================================================
@@ -147,8 +147,8 @@ REBOOT
 RECOMMENDED
   Use the supplied script instead of manually copying individual files:
 
-  chmod +x ~/Downloads/update-system-and-push-v2.sh
-  ~/Downloads/update-system-and-push-v2.sh
+  chmod +x ~/Downloads/update-system-and-push-v3.1.sh
+  ~/Downloads/update-system-and-push-v3.1.sh
 
 WHAT THAT SCRIPT DOES
   1. Backs up the existing flake.lock.
@@ -177,7 +177,7 @@ MANUAL VERSION, IF YOU ONLY WANT THE BASIC IDEA
   git push
 
 DO NOT rely on that four-command version for the full backup.
-The supplied sync script handles the copying/exclusions first.
+The merged script handles the copying/exclusions first.
 
 
 ======================================================================
@@ -189,10 +189,10 @@ USE THIS WHEN
   like Mango, Noctalia, Kitty, LazyVim, Steam launcher, OBS paths, etc.
 
 COPY-PASTE
-  chmod +x ~/Downloads/sync-config-to-github.sh
-  ~/Downloads/sync-config-to-github.sh
+  chmod +x ~/Downloads/update-system-and-push-v3.1.sh --sync-only
+  ~/Downloads/update-system-and-push-v3.1.sh --sync-only
 
-The sync script stores a reusable snapshot under:
+The merged script in --sync-only mode stores a reusable snapshot under:
   ~/nixos-config/nixos/
 
 and also keeps the main root flake/config files updated for compatibility.
@@ -277,6 +277,7 @@ MANUAL CHECKS
   [ ] Kitty opens
   [ ] Super+Space launcher works
   [ ] Noctalia bar works
+  [ ] Super+Shift+Alt+R toggles Bread/DWM <-> Original
   [ ] audio and volume keys work
   [ ] Wi-Fi/Bluetooth work
   [ ] screenshots go to ~/Pictures/Screenshots
@@ -485,7 +486,7 @@ CHECK
 HELPER LOCATION
   ~/.local/bin/mango-animation
 
-The GitHub sync script backs this helper up when it exists.
+The merged script backs this helper up when it exists.
 
 
 ======================================================================
@@ -587,6 +588,35 @@ COPY-PASTE
       "$HOME/.local/share/applications/"
   fi
 
+
+  # DESKTOP_LOOK_PROFILE_RESTORE
+  if [ -d "$REPO/dotfiles/.local/share/desktop-look-toggle" ]; then
+    mkdir -p "$HOME/.local/share"
+
+    rm -rf "$HOME/.local/share/desktop-look-toggle"
+
+    cp -a \
+      "$REPO/dotfiles/.local/share/desktop-look-toggle" \
+      "$HOME/.local/share/desktop-look-toggle"
+
+    mkdir -p "$HOME/.local/state/noctalia"
+
+    # A clean restore starts in Bread/DWM.
+    cp -a \
+      "$HOME/.local/share/desktop-look-toggle/dwm/mango.conf" \
+      "$HOME/.config/mango/config.conf"
+
+    cp -a \
+      "$HOME/.local/share/desktop-look-toggle/dwm/noctalia-settings.toml" \
+      "$HOME/.local/state/noctalia/settings.toml"
+
+    printf '%s\n' dwm \
+      > "$HOME/.local/share/desktop-look-toggle/active"
+
+    if [ -f "$HOME/.local/bin/toggle-desktop-look" ]; then
+      chmod +x "$HOME/.local/bin/toggle-desktop-look"
+    fi
+  fi
   echo "Dotfiles restored."
   echo "Log out/in if launcher entries or PATH changes do not appear."
   )
@@ -750,10 +780,10 @@ The important principle stays the same:
 ======================================================================
 
 WHEN YOU CHANGE ONLY MANGO / NOCTALIA / USER CONFIG
-  ~/Downloads/sync-config-to-github.sh
+  ~/Downloads/update-system-and-push-v3.1.sh --sync-only
 
 WHEN YOU WANT TO UPDATE EVERYTHING AND SAVE THE RESULT
-  ~/Downloads/update-system-and-push-v2.sh
+  ~/Downloads/update-system-and-push-v3.1.sh
 
 WHEN A REBUILD FAILS
   Do not reboot.
@@ -767,6 +797,86 @@ WHEN MOVING TO A NEW PC
   Build first.
   Review CPU/GPU-specific settings.
   Switch only after the build succeeds.
+
+
+======================================================================
+18. ORIGINAL <-> BREAD/DWM DESKTOP LOOK SWITCHER
+======================================================================
+
+CURRENT BEHAVIOR
+
+  This setup has two independently editable appearance profiles:
+
+    Bread / DWM
+    Original
+
+  Mango and Noctalia switch together.
+
+  Before the other profile is loaded, the currently active Mango config
+  and Noctalia settings are saved back into the active profile. Changes
+  made to either appearance therefore persist independently.
+
+
+KEYBIND
+
+  Super + Shift + Alt + R
+
+
+MANUAL COMMANDS
+
+  toggle-desktop-look
+  toggle-desktop-look dwm
+  toggle-desktop-look original
+  toggle-desktop-look save
+  toggle-desktop-look status
+
+
+AUTHORITATIVE FILES
+
+  Switcher:
+    ~/.local/bin/toggle-desktop-look
+
+  Shared Mango keybind:
+    ~/.config/mango/look-toggle.conf
+
+  Bread/DWM:
+    ~/.local/share/desktop-look-toggle/dwm/mango.conf
+    ~/.local/share/desktop-look-toggle/dwm/noctalia-settings.toml
+
+  Original:
+    ~/.local/share/desktop-look-toggle/original/mango.conf
+    ~/.local/share/desktop-look-toggle/original/noctalia-settings.toml
+
+
+BACKUP / UPDATE SCRIPT
+
+  Full system update + health check + GitHub snapshot:
+
+    ~/Downloads/update-system-and-push-v3.1.sh
+
+  GitHub snapshot only, without updating NixOS:
+
+    ~/Downloads/update-system-and-push-v3.1.sh --sync-only
+
+
+MANGO RELOAD
+
+  Correct:
+    mmsg dispatch reload_config
+
+  Obsolete / incorrect:
+    mmsg -d reload_config
+
+
+IMPORTANT
+
+  Do not manually recreate gap, opacity, blur, border, animation, bar or
+  panel values from this guide. The Mango and Noctalia profile files are
+  the authoritative current values.
+
+  The abandoned Noctalia authentication-logo/custom-assets experiment is
+  not part of the reproducible configuration and must not add
+  NOCTALIA_ASSETS_DIR to the restored setup.
 
 ======================================================================
 END

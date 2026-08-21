@@ -20,6 +20,7 @@
         ./hardware-configuration.nix
         mango.nixosModules.mango
         ./comic-mono.nix
+        ./wave75-via.nix
         noctalia.nixosModules.default
         inputs.noctalia-greeter.nixosModules.default
         inputs.lotus.nixosModules.fcitx5-lotus

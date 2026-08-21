@@ -176,6 +176,9 @@ programs.noctalia-greeter = {
     vulkan-tools
     libva-utils
 
+    # Keyboard
+    via
+
     # Everyday CLI tools
     git
     curl
@@ -197,10 +200,24 @@ programs.noctalia-greeter = {
     xdg-utils
     xdg-user-dirs
 
+    # Keyboard configurator
+    via
+
     # Icons
     adwaita-icon-theme
     papirus-icon-theme
   ];
+
+
+  hardware.keyboard.qmk.enable = true;
+
+  services.udev.packages = [
+    pkgs.via
+  ];
+
+  services.udev.extraRules = ''
+    KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="36b0", ATTRS{idProduct}=="3009", MODE="0660", GROUP="users", TAG+="uaccess"
+  '';
 
   system.stateVersion = "26.05";
   services.cloudflare-warp.enable = true;

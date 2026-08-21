@@ -17,6 +17,7 @@ Super + F           Full screen
 Super + Shift + F   Toggle floating
 Super + N           Switch tiling layout
 Super + R           Reload Mango config
+Super + Shift + Alt + R  Toggle Bread/DWM <-> Original look
 Super + Shift + M   Exit Mango
 
 Super + H/J/K/L     Focus left/down/up/right
@@ -32,3 +33,26 @@ After first login:
 
 Super + Shift + Enter  Promote/swap focused window with the main window
 Super + mouse wheel    Previous/next occupied workspace
+
+DESKTOP LOOK SWITCHER
+
+Super + Shift + Alt + R
+    Toggle Bread/DWM <-> Original.
+
+toggle-desktop-look
+    Toggle between Bread/DWM and Original.
+
+toggle-desktop-look dwm
+    Load Bread/DWM.
+
+toggle-desktop-look original
+    Load Original.
+
+toggle-desktop-look save
+    Save the currently active Mango + Noctalia profile.
+
+toggle-desktop-look status
+    Show the active profile.
+
+The current Mango + Noctalia profile is saved automatically before
+the other appearance is loaded.
