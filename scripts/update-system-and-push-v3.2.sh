@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 #
-# update-system-and-push-v3.1.sh
+# update-system-and-push-v3.2.sh
 #
 # One merged tool for this Tonelico NixOS machine:
 #
 #   Full update + health check + reproducible GitHub snapshot:
-#       bash ~/Downloads/update-system-and-push-v3.1.sh
+#       bash ~/Downloads/update-system-and-push-v3.2.sh
 #
 #   Snapshot/push the current working config WITHOUT updating NixOS:
-#       bash ~/Downloads/update-system-and-push-v3.1.sh --sync-only
+#       bash ~/Downloads/update-system-and-push-v3.2.sh --sync-only
 #
 # This script does NOT require python3.
 #
@@ -30,11 +30,11 @@ case "${1:-}" in
     -h|--help)
         cat <<'EOF'
 Usage:
-  update-system-and-push-v3.1.sh
+  update-system-and-push-v3.2.sh
       Update NixOS + non-Nix items, build, switch, health-check,
       then snapshot the reproducible setup and push it to GitHub.
 
-  update-system-and-push-v3.1.sh --sync-only
+  update-system-and-push-v3.2.sh --sync-only
       Do NOT update or rebuild NixOS. Snapshot the current working
       setup, update the docs, commit, and push to GitHub.
 EOF
@@ -240,7 +240,7 @@ if [ "$MODE" = "full" ]; then
         prismlauncher \
         steam \
         nvim \
-        fetch \
+        fastfetch \
         noctalia \
         mango \
         wpctl
@@ -584,6 +584,19 @@ done < <(
         -print0
 )
 
+# Preserve declarative assets required by Nix modules.
+# comic-mono.nix uses ./fonts/comic-mono, so a Nix-only copy is incomplete.
+if [ -d "$NIX_DIR/fonts" ]; then
+    rm -rf "$NIX_DST/fonts"
+
+    cp -a \
+        --no-preserve=ownership \
+        "$NIX_DIR/fonts" \
+        "$NIX_DST/fonts"
+
+    echo "Saved NixOS font assets."
+fi
+
 rm -f \
     "$NIX_DST/hardware-configuration.nix"
 
@@ -840,11 +853,13 @@ say "18. UPDATE V5 GUIDE"
 
 # The merged V3 script replaces both previous helper scripts.
 sed -i \
-    's|~/Downloads/update-system-and-push-v2\.sh|~/Downloads/update-system-and-push-v3.1.sh|g' \
+    -e 's|~/Downloads/update-system-and-push-v2\.sh|~/Downloads/update-system-and-push-v3.2.sh|g' \
+    -e 's|~/Downloads/update-system-and-push-v3\.sh|~/Downloads/update-system-and-push-v3.2.sh|g' \
+    -e 's|~/Downloads/update-system-and-push-v3\.1\.sh|~/Downloads/update-system-and-push-v3.2.sh|g' \
     "$V5"
 
 sed -i \
-    's|~/Downloads/sync-config-to-github\.sh|~/Downloads/update-system-and-push-v3.1.sh --sync-only|g' \
+    's|~/Downloads/sync-config-to-github\.sh|~/Downloads/update-system-and-push-v3.2.sh --sync-only|g' \
     "$V5"
 
 sed -i \
@@ -1005,11 +1020,11 @@ BACKUP / UPDATE SCRIPT
 
   Full system update + health check + GitHub snapshot:
 
-    ~/Downloads/update-system-and-push-v3.1.sh
+    ~/Downloads/update-system-and-push-v3.2.sh
 
   GitHub snapshot only, without updating NixOS:
 
-    ~/Downloads/update-system-and-push-v3.1.sh --sync-only
+    ~/Downloads/update-system-and-push-v3.2.sh --sync-only
 
 
 MANGO RELOAD
@@ -1067,14 +1082,15 @@ SELF="$(readlink -f "$0")"
 
 cp -a \
     "$SELF" \
-    "$REPO/scripts/update-system-and-push-v3.1.sh"
+    "$REPO/scripts/update-system-and-push-v3.2.sh"
 
 chmod +x \
-    "$REPO/scripts/update-system-and-push-v3.1.sh"
+    "$REPO/scripts/update-system-and-push-v3.2.sh"
 
 # Old repository helper copies are obsolete after the merge.
 rm -f \
     "$REPO/scripts/update-system-and-push-v2.sh" \
+    "$REPO/scripts/update-system-and-push-v3.1.sh" \
     "$REPO/scripts/sync-config-to-github.sh"
 
 
@@ -1129,6 +1145,40 @@ find "$PROFILE_DST" \
 
 
 say "21. STAGE + VALIDATE GIT CHANGES"
+
+# Normalize formatting in REPOSITORY COPIES only.
+# This prevents git diff --check from stopping on harmless whitespace copied
+# from the live config, without changing /etc/nixos or ~/.config.
+for file in \
+    "$REPO/configuration.nix" \
+    "$REPO/nixos/configuration.nix"
+do
+    if [ -f "$file" ]; then
+        sed -i -E 's/[[:space:]]+$//' "$file"
+    fi
+done
+
+KITTY_REPO="$REPO/dotfiles/.config/kitty/kitty.conf"
+
+if [ -f "$KITTY_REPO" ]; then
+    tmp="$(mktemp)"
+
+    awk '
+        { line[NR] = $0 }
+        END {
+            n = NR
+            while (n > 0 && line[n] ~ /^[[:space:]]*$/) {
+                n--
+            }
+            for (i = 1; i <= n; i++) {
+                print line[i]
+            }
+        }
+    ' "$KITTY_REPO" > "$tmp"
+
+    cat "$tmp" > "$KITTY_REPO"
+    rm -f "$tmp"
+fi
 
 git add -A
 
@@ -1222,5 +1272,5 @@ echo "  - Original profile"
 echo "  - Super+Shift+Alt+R persistent switcher"
 echo "  - updated V5 guide"
 echo "  - updated MANGO-KEYS.txt"
-echo "  - merged update-system-and-push-v3.1.sh"
+echo "  - merged update-system-and-push-v3.2.sh"
 echo
