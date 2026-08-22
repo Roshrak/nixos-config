@@ -1,4 +1,4 @@
-config_version = 12
+config_version = 13
 
 [bar.default]
 background_opacity = 0.34999999217689037
@@ -39,6 +39,8 @@ widget_order = [ "lockscreen-login-box@HEADLESS-1", "lockscreen-login-box@HDMI-A
     cx = 960.0
     cy = 898.0
     output = "HDMI-A-1"
+    placement_height = 1080.0
+    placement_width = 1920.0
     rotation = 0.0
     type = "login_box"
 
@@ -64,6 +66,8 @@ widget_order = [ "lockscreen-login-box@HEADLESS-1", "lockscreen-login-box@HDMI-A
     cx = 1200.0
     cy = 898.0
     output = "HEADLESS-1"
+    placement_height = 0.0
+    placement_width = 0.0
     rotation = 0.0
     type = "login_box"
 
@@ -89,6 +93,8 @@ widget_order = [ "lockscreen-login-box@HEADLESS-1", "lockscreen-login-box@HDMI-A
     cx = 960.0
     cy = 1018.0
     output = "eDP-1"
+    placement_height = 1200.0
+    placement_width = 1920.0
     rotation = 0.0
     type = "login_box"
 
