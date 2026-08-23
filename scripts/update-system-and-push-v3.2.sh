@@ -722,6 +722,7 @@ mkdir -p "$BIN_DST"
 
 for helper in \
     toggle-desktop-look \
+    noctalia-greeter-sync-smart \
     mango-animation \
     steam \
     obs \
@@ -1098,6 +1099,9 @@ say "20. VERIFY REPRODUCIBLE SNAPSHOT"
 
 [ -f "$REPO/dotfiles/.config/mango/look-toggle.conf" ] ||
     fail "look-toggle.conf was not copied"
+
+[ -f "$REPO/dotfiles/.local/bin/noctalia-greeter-sync-smart" ] ||
+    fail "noctalia-greeter-sync-smart was not copied"
 
 [ -f "$REPO/dotfiles/.local/bin/toggle-desktop-look" ] ||
     fail "toggle-desktop-look was not copied"

@@ -119,6 +119,7 @@ password_style = "random"
 
     [shell.greeter_sync]
     auto_sync = true
+    privilege_command = "/home/aesc/.local/bin/noctalia-greeter-sync-smart"
 
     [shell.launcher]
     app_grid = true

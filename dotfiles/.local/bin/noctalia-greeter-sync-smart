@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+HELPER="${1:-}"
+STAGING="${2:-}"
+
+if [ -z "$HELPER" ] || [ -z "$STAGING" ]; then
+    echo "Usage: noctalia-greeter-sync-smart <helper> <staging>" >&2
+    exit 2
+fi
+
+RUNTIME="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+
+mkdir -p "$RUNTIME"
+
+SESSION_MARKER="$RUNTIME/noctalia-greeter-startup-sync-seen"
+FORCE_MARKER="$RUNTIME/noctalia-greeter-force-next-sync"
+RECENT_FORCE="$RUNTIME/noctalia-greeter-recent-forced-sync"
+
+cleanup_staging() {
+    if [ -n "$STAGING" ]; then
+        rm -rf -- "$STAGING" 2>/dev/null || true
+    fi
+}
+
+
+# ------------------------------------------------------------
+# Explicit profile switch/manual forced sync
+# ------------------------------------------------------------
+
+if [ -e "$FORCE_MARKER" ]; then
+    rm -f "$FORCE_MARKER"
+
+    # The startup sync is no longer relevant once a real sync occurs.
+    : > "$SESSION_MARKER"
+
+    date +%s > "$RECENT_FORCE"
+
+    logger -t noctalia-greeter-sync-smart \
+        "Allowing explicitly requested greeter sync"
+
+    exec run0 "$HELPER" "$STAGING"
+fi
+
+
+# ------------------------------------------------------------
+# First automatic sync after LOGIN:
+# silently acknowledge it.
+#
+# /run/user/$UID disappears with the login runtime / reboot,
+# so this is session-scoped rather than process-scoped.
+# ------------------------------------------------------------
+
+if [ ! -e "$SESSION_MARKER" ]; then
+    : > "$SESSION_MARKER"
+
+    cleanup_staging
+
+    logger -t noctalia-greeter-sync-smart \
+        "Skipped initial login greeter sync"
+
+    exit 0
+fi
+
+
+# ------------------------------------------------------------
+# Noctalia may schedule its normal auto-sync shortly after the
+# explicit profile sync. Suppress only that immediate duplicate.
+# ------------------------------------------------------------
+
+if [ -r "$RECENT_FORCE" ]; then
+    NOW="$(date +%s)"
+    LAST="$(cat "$RECENT_FORCE" 2>/dev/null || echo 0)"
+
+    case "$LAST" in
+        ''|*[!0-9]*)
+            LAST=0
+            ;;
+    esac
+
+    AGE=$((NOW - LAST))
+
+    if [ "$AGE" -ge 0 ] && [ "$AGE" -le 4 ]; then
+        cleanup_staging
+
+        logger -t noctalia-greeter-sync-smart \
+            "Suppressed duplicate auto-sync after forced profile sync"
+
+        exit 0
+    fi
+fi
+
+
+# ------------------------------------------------------------
+# Real wallpaper/theme/etc. change.
+# Sync normally.
+# ------------------------------------------------------------
+
+exec run0 "$HELPER" "$STAGING"

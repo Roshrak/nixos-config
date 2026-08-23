@@ -27,6 +27,34 @@ widget_spacing = 3
 
 [desktop_widgets]
 enabled = false
+schema_version = 2
+widget_order = [ "desktop-widget-0000000000000001" ]
+
+    [desktop_widgets.grid]
+    cell_size = 64
+    major_interval = 4
+    visible = true
+
+    [desktop_widgets.widget.desktop-widget-0000000000000001]
+    box_height = 752.0
+    box_width = 1904.0
+    cx = 966.0
+    cy = 542.0
+    output = "HDMI-A-1"
+    placement_height = 1080.0
+    placement_width = 1920.0
+    rotation = 0.0
+    type = "audio_visualizer"
+
+        [desktop_widgets.widget.desktop-widget-0000000000000001.settings]
+        background = false
+        background_opacity = 0.45000000000000001
+        bands = 128
+        centered = true
+        color_2 = "secondary"
+        mirrored = true
+        reversed = false
+        show_when_idle = true
 
 [location]
 auto_locate = true
@@ -37,7 +65,12 @@ monitors = [ "eDP-1" ]
 [lockscreen_widgets]
 enabled = true
 schema_version = 2
-widget_order = [ "lockscreen-login-box@HEADLESS-1", "lockscreen-login-box@HDMI-A-1", "lockscreen-login-box@eDP-1" ]
+widget_order = [
+    "lockscreen-login-box@HEADLESS-1",
+    "lockscreen-login-box@HDMI-A-1",
+    "lockscreen-login-box@eDP-1",
+    "lockscreen-widget-0000000000000001"
+]
 
     [lockscreen_widgets.grid]
     cell_size = 16
@@ -48,7 +81,7 @@ widget_order = [ "lockscreen-login-box@HEADLESS-1", "lockscreen-login-box@HDMI-A
     box_height = 196.0
     box_width = 810.0
     cx = 960.0
-    cy = 898.0
+    cy = 862.0
     output = "HDMI-A-1"
     placement_height = 1080.0
     placement_width = 1920.0
@@ -125,6 +158,25 @@ widget_order = [ "lockscreen-login-box@HEADLESS-1", "lockscreen-login-box@HDMI-A
         show_unlock_hint = true
         show_weather = true
 
+    [lockscreen_widgets.widget.lockscreen-widget-0000000000000001]
+    box_height = 384.0
+    box_width = 384.0
+    cx = 256.0
+    cy = 140.0
+    output = "HDMI-A-1"
+    placement_height = 1080.0
+    placement_width = 1920.0
+    rotation = 0.0
+    type = "clock"
+
+        [lockscreen_widgets.widget.lockscreen-widget-0000000000000001.settings]
+        background_color = "shadow"
+        background_opacity = 0.0
+        clock_style = "digital"
+        color = "secondary"
+        font_family = ""
+        shadow = true
+
 [notification]
 background_opacity = 0.93999999999999995
 offset_x = 8
@@ -145,6 +197,7 @@ password_style = "random"
 
     [shell.greeter_sync]
     auto_sync = true
+    privilege_command = "/home/aesc/.local/bin/noctalia-greeter-sync-smart"
 
     [shell.launcher]
     app_grid = true
@@ -162,6 +215,7 @@ password_style = "random"
 builtin = "Noctalia"
 community_palette = "Oxocarbon"
 custom_palette = "konachan-com-362509-bikini-bow-braids-breasts-bunny-fang-flowers-gray-eyes-headdress-long-hair-navel-red-hair-ribbons-rose-signed-swimsuit-thighhighs-wristwear-vib"
+mode = "dark"
 source = "wallpaper"
 wallpaper_scheme = "vibrant"
 
@@ -173,22 +227,54 @@ wallpaper_scheme = "vibrant"
 directory = "/home/aesc/Pictures/Wallpapers"
 
     [wallpaper.default]
-    path = "/home/aesc/Pictures/Wallpapers/120523661_p0.jpg"
+    path = "/home/aesc/Pictures/Wallpapers/flower_sunflower_artificial_119551_1920x1200.jpg"
 
     [wallpaper.last]
-    path = "/home/aesc/Pictures/Wallpapers/120523661_p0.jpg"
+    path = "/home/aesc/Pictures/Wallpapers/flower_sunflower_artificial_119551_1920x1200.jpg"
 
     [wallpaper.monitors.HDMI-A-1]
-    path = "/home/aesc/Pictures/Wallpapers/120523661_p0.jpg"
+    path = "/home/aesc/Pictures/Wallpapers/flower_sunflower_artificial_119551_1920x1200.jpg"
 
     [wallpaper.monitors.eDP-1]
-    path = "/home/aesc/Pictures/Wallpapers/120523661_p0.jpg"
+    path = "/home/aesc/Pictures/Wallpapers/flower_sunflower_artificial_119551_1920x1200.jpg"
 
     [[wallpaper.favorite]]
     palette_source = "wallpaper"
     path = "/home/aesc/Pictures/Wallpapers/120523661_p0.jpg"
     theme_mode = "dark"
     wallpaper_scheme = "vibrant"
+
+    [[wallpaper.favorite]]
+    path = "/home/aesc/Pictures/Wallpapers/pexels-lauripoldre-24963115.jpg"
+    theme_mode = "auto"
+
+    [[wallpaper.favorite]]
+    path = "/home/aesc/Pictures/Wallpapers/lake_forest_snow_130421_1920x1200.jpg"
+    theme_mode = "auto"
+
+    [[wallpaper.favorite]]
+    path = "/home/aesc/Pictures/Wallpapers/Konachan.com - 403284 animal aqua_hair bell bicycle braids building cat catgirl clouds drink gloves headband long_hair red_eyes shade sky stairs tail thighhighs yukoama.jpg"
+    theme_mode = "auto"
+
+    [[wallpaper.favorite]]
+    path = "/home/aesc/Pictures/Wallpapers/Konachan.com - 403305 animal blue_hair cat drink food gloves goggles gray_hair group headband honkai_(series) krux_(k_krux) long_hair male ponytail purple_hair sunglasses.jpg"
+    theme_mode = "auto"
+
+    [[wallpaper.favorite]]
+    path = "/home/aesc/Pictures/Wallpapers/hatsune-miku-mclaren-gtr-and-the-fashionable-driver-27-1920x1200.jpg"
+    theme_mode = "auto"
+
+    [[wallpaper.favorite]]
+    path = "/home/aesc/Pictures/Wallpapers/flower_sunflower_artificial_119551_1920x1200.jpg"
+    theme_mode = "auto"
+
+    [[wallpaper.favorite]]
+    path = "/home/aesc/Pictures/Wallpapers/ashes_ash_firewood_130924_1920x1200.jpg"
+    theme_mode = "auto"
+
+    [[wallpaper.favorite]]
+    path = "/home/aesc/Pictures/Wallpapers/__morgan_le_fay_fate_and_1_more_drawn_by_mochi_upamo__5a0064b23658cf009024bdb8bb13c707.jpg"
+    theme_mode = "auto"
 
 [widget.network]
 show_label = false

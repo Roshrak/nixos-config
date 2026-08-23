@@ -155,6 +155,21 @@ load_profile() {
         mmsg dispatch reload_config >/dev/null 2>&1 || true
     fi
 
+    # TONELICO_GREETER_SYNC_AFTER_PROFILE_LOAD
+    # Explicitly reload Noctalia and sync the greeter after
+    # Original/DWM profile replacement.
+    if command -v noctalia >/dev/null 2>&1; then
+        noctalia msg config-reload >/dev/null 2>&1 || true
+
+        local gruntime
+        gruntime="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+        mkdir -p "$gruntime"
+        : > "$gruntime/noctalia-greeter-force-next-sync"
+
+        sleep 0.25
+        noctalia msg greeter-sync >/dev/null 2>&1 || true
+    fi
+
     case "$profile" in
         dwm)
             label="Bread / DWM"
