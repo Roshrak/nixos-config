@@ -212,7 +212,7 @@ password_style = "random"
     transparency_mode = "glass"
 
 [theme]
-builtin = "Noctalia"
+builtin = "Ayu"
 community_palette = "Oxocarbon"
 custom_palette = "konachan-com-362509-bikini-bow-braids-breasts-bunny-fang-flowers-gray-eyes-headdress-long-hair-navel-red-hair-ribbons-rose-signed-swimsuit-thighhighs-wristwear-vib"
 mode = "dark"
@@ -227,16 +227,16 @@ wallpaper_scheme = "vibrant"
 directory = "/home/aesc/Pictures/Wallpapers"
 
     [wallpaper.default]
-    path = "/home/aesc/Pictures/Wallpapers/flower_sunflower_artificial_119551_1920x1200.jpg"
+    path = "/home/aesc/Pictures/Wallpapers/120523661_p0.jpg"
 
     [wallpaper.last]
-    path = "/home/aesc/Pictures/Wallpapers/flower_sunflower_artificial_119551_1920x1200.jpg"
+    path = "/home/aesc/Pictures/Wallpapers/120523661_p0.jpg"
 
     [wallpaper.monitors.HDMI-A-1]
     path = "/home/aesc/Pictures/Wallpapers/flower_sunflower_artificial_119551_1920x1200.jpg"
 
     [wallpaper.monitors.eDP-1]
-    path = "/home/aesc/Pictures/Wallpapers/flower_sunflower_artificial_119551_1920x1200.jpg"
+    path = "/home/aesc/Pictures/Wallpapers/120523661_p0.jpg"
 
     [[wallpaper.favorite]]
     palette_source = "wallpaper"
@@ -273,8 +273,10 @@ directory = "/home/aesc/Pictures/Wallpapers"
     theme_mode = "auto"
 
     [[wallpaper.favorite]]
+    builtin_palette = "Ayu"
+    palette_source = "builtin"
     path = "/home/aesc/Pictures/Wallpapers/__morgan_le_fay_fate_and_1_more_drawn_by_mochi_upamo__5a0064b23658cf009024bdb8bb13c707.jpg"
-    theme_mode = "auto"
+    theme_mode = "dark"
 
 [widget.network]
 show_label = false
