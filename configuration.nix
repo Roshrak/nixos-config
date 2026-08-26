@@ -8,7 +8,7 @@
     extra-trusted-public-keys = [
       "noctalia.cachix.org-1:pCOR47nnMEo5thcxNDtzWpOxNFQsBRglJzxWPp3dkU4="
     ];
-  };
+};
   nix.registry.nixpkgs.flake = inputs.nixpkgs;
   nix.optimise.automatic = true;
   nix.gc = {

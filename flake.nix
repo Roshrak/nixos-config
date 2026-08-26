@@ -26,6 +26,7 @@
         inputs.lotus.nixosModules.fcitx5-lotus
         ./apps-and-lotus.nix
         ./windows-vm.nix
+        ./desktop/plasma.nix      # KDE Plasma 6 second session
         ./configuration.nix
       ];
     };

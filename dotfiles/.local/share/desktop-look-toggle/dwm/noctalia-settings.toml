@@ -196,7 +196,6 @@ font_family = "Comic Mono"
 password_style = "random"
 
     [shell.greeter_sync]
-    auto_sync = true
     privilege_command = "/home/aesc/.local/bin/noctalia-greeter-sync-smart"
 
     [shell.launcher]
@@ -265,18 +264,28 @@ directory = "/home/aesc/Pictures/Wallpapers"
     theme_mode = "auto"
 
     [[wallpaper.favorite]]
+    palette_source = "wallpaper"
     path = "/home/aesc/Pictures/Wallpapers/flower_sunflower_artificial_119551_1920x1200.jpg"
-    theme_mode = "auto"
-
-    [[wallpaper.favorite]]
-    path = "/home/aesc/Pictures/Wallpapers/ashes_ash_firewood_130924_1920x1200.jpg"
-    theme_mode = "auto"
+    theme_mode = "dark"
+    wallpaper_scheme = "vibrant"
 
     [[wallpaper.favorite]]
     builtin_palette = "Ayu"
     palette_source = "builtin"
+    path = "/home/aesc/Pictures/Wallpapers/ashes_ash_firewood_130924_1920x1200.jpg"
+    theme_mode = "dark"
+
+    [[wallpaper.favorite]]
+    palette_source = "wallpaper"
     path = "/home/aesc/Pictures/Wallpapers/__morgan_le_fay_fate_and_1_more_drawn_by_mochi_upamo__5a0064b23658cf009024bdb8bb13c707.jpg"
     theme_mode = "dark"
+    wallpaper_scheme = "vibrant"
+
+    [[wallpaper.favorite]]
+    palette_source = "wallpaper"
+    path = "/home/aesc/Pictures/Wallpapers/nix.png"
+    theme_mode = "dark"
+    wallpaper_scheme = "vibrant"
 
 [widget.network]
 show_label = false

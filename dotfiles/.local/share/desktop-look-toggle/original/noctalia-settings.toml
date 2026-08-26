@@ -118,7 +118,6 @@ widget_order = [ "lockscreen-login-box@HEADLESS-1", "lockscreen-login-box@HDMI-A
 password_style = "random"
 
     [shell.greeter_sync]
-    auto_sync = true
     privilege_command = "/home/aesc/.local/bin/noctalia-greeter-sync-smart"
 
     [shell.launcher]

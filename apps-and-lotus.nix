@@ -14,7 +14,11 @@
     gcc
     tree-sitter
     lazygit
-    chromium
+                        (chromium.override {
+  commandLineArgs = [
+    "--password-store=basic"
+  ];
+})
     bibata-cursors
     xdg-user-dirs
 
