@@ -185,7 +185,7 @@ programs.noctalia-greeter = {
     libva-utils
 
     # Keyboard
-    via 
+    via
 
     # Everyday CLI tools
     git
