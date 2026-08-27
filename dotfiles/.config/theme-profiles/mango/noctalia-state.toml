@@ -3,14 +3,15 @@ config_version = 13
 [bar.default]
 background_opacity = 0.34999999217689037
 border = "primary"
-border_width = 1.0
 capsule_border = "primary"
 capsule_thickness = 0.63999998942017555
 color = "on_surface"
 concave_edge_corners = false
 end = [ "media", "tray", "notifications", "clipboard", "network", "bluetooth", "battery", "session" ]
 icon_color = "secondary"
-margin_ends = 50
+margin_ends = 0
+panel_overlap = 0
+radius = 0
 start = [ "launcher", "workspaces" ]
 thickness = 30
 
@@ -115,7 +116,13 @@ widget_order = [ "lockscreen-login-box@HEADLESS-1", "lockscreen-login-box@HDMI-A
         show_weather = true
 
 [shell]
+button_borders = false
+corner_radius_scale = 0.0
 password_style = "random"
+
+    [shell.greeter_sync]
+    auto_sync = false
+    privilege_command = "/home/aesc/.local/bin/noctalia-greeter-sync-smart"
 
     [shell.launcher]
     app_grid = true
@@ -142,16 +149,22 @@ wallpaper_scheme = "vibrant"
 directory = "/home/aesc/Pictures/Wallpapers"
 
     [wallpaper.default]
-    path = "/home/aesc/Pictures/Wallpapers/lake_forest_snow_130421_1920x1200.jpg"
+    path = "/home/aesc/Pictures/Wallpapers/wallhaven-5ykdq8.png"
 
     [wallpaper.last]
-    path = "/home/aesc/Pictures/Wallpapers/lake_forest_snow_130421_1920x1200.jpg"
+    path = "/home/aesc/Pictures/Wallpapers/wallhaven-5ykdq8.png"
 
     [wallpaper.monitors.HDMI-A-1]
     path = "/home/aesc/Pictures/Wallpapers/pexels-lauripoldre-24963115.jpg"
 
     [wallpaper.monitors.eDP-1]
-    path = "/home/aesc/Pictures/Wallpapers/lake_forest_snow_130421_1920x1200.jpg"
+    path = "/home/aesc/Pictures/Wallpapers/wallhaven-5ykdq8.png"
+
+    [[wallpaper.favorite]]
+    palette_source = "wallpaper"
+    path = "/home/aesc/Pictures/Wallpapers/wallhaven-5ykdq8.png"
+    theme_mode = "dark"
+    wallpaper_scheme = "vibrant"
 
 [widget.network]
 show_label = false
@@ -161,7 +174,3 @@ vpn_status = "both"
 [widget.workspaces]
 empty_color = "tertiary"
 style = "minimal"
-
-[shell.greeter_sync]
-    privilege_command = "/home/aesc/.local/bin/noctalia-greeter-sync-smart"
-    auto_sync = false
