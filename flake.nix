@@ -6,6 +6,7 @@
     mango.url = "github:mangowm/mango";
     noctalia.url = "github:noctalia-dev/noctalia/cachix";
     lotus.url = "github:LotusInputMethod/fcitx5-lotus";
+    niri.url = "github:epireyn/niri-flake";          # NEW - Phase 5
     noctalia-greeter = {
       url = "github:noctalia-dev/noctalia-greeter";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -27,6 +28,7 @@
         ./apps-and-lotus.nix
         ./windows-vm.nix
         ./desktop/plasma.nix      # KDE Plasma 6 second session
+        ./desktop/niri.nix        # Niri third session (Phase 5)
         ./configuration.nix
       ];
     };

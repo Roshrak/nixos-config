@@ -1,0 +1,17 @@
+UNIT FILE                      STATE   PRESET
+dbus-broker.service            enabled ignored
+gcr-ssh-agent.service          enabled ignored
+geoclue-agent.service          enabled ignored
+nixos-activation.service       enabled ignored
+nixos-rebuild-sycoca.service   enabled ignored
+obex.service                   enabled ignored
+systemd-tmpfiles-setup.service enabled ignored
+wireplumber.service            enabled ignored
+dbus.socket                    enabled ignored
+gcr-ssh-agent.socket           enabled ignored
+pipewire-pulse.socket          enabled ignored
+pipewire.socket                enabled ignored
+speech-dispatcher.socket       enabled ignored
+systemd-tmpfiles-clean.timer   enabled ignored
+
+14 unit files listed.

@@ -14,14 +14,28 @@
   # ---- Expose registered sessions to noctalia-greeter ----------------------
   # The greeter scans /run/current-system/sw/share/wayland-sessions. Link every
   # session registered through services.displayManager.sessionPackages there,
-  # so the picker lists BOTH Mango and Plasma instead of relying on the
-  # greeter's implicit Mango fallback.
+  # so the picker lists Mango, Plasma and Niri.
+  #
+  # niri.desktop is COPIED with a patched Exec= pointing at the guarded
+  # wrapper (~/.local/bin/niri-session-guarded): greetd kills its child
+  # tree when a session ends, which can orphan niri.service; the wrapper
+  # cleans any leftover compositor before exec'ing the real niri-session,
+  # fixing "A niri session is already running." on re-login.
   environment.systemPackages = [
-    (pkgs.runCommand "dm-sessions-share" { }
+    # meta.priority=1: the user env (buildEnv) merges share/wayland-sessions
+    # from BOTH this package and the niri package; without a priority the
+    # niri package's unpatched desktop wins the collision.
+    (pkgs.runCommand "dm-sessions-share" { meta.priority = 1; }
       ''
         mkdir -p $out/share/wayland-sessions
         for f in ${config.services.displayManager.sessionData.desktops}/share/wayland-sessions/*.desktop; do
-          ln -s "$f" $out/share/wayland-sessions/
+          base="$(basename "$f")"
+          if [ "$base" = "niri.desktop" ]; then
+            sed 's|^Exec=.*|Exec=/home/aesc/.local/bin/niri-session-guarded|' "$f" \
+              > "$out/share/wayland-sessions/$base"
+          else
+            ln -s "$f" "$out/share/wayland-sessions/$base"
+          fi
         done
       '')
   ];

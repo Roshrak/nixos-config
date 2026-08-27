@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# apply-theme-profile <mango|kde|niri>
+# Stamps shared config files with the chosen session profile at login,
+# so Mango, KDE and Niri keep independent looks.
+#
+# Ownership:
+#   gtk-{3,4}.0/settings.ini + gsettings  - stamped per profile
+#   ~/.config/kitty/themes/noctalia.conf  - stamped per profile
+#       (regenerated live by Noctalia within the session)
+#   ~/.local/state/noctalia/settings.toml - stamped per profile
+#       (use save-noctalia-profile <name> to persist in-session changes)
+set -euo pipefail
+
+PROFILE_ROOT="$HOME/.config/theme-profiles"
+PROFILES=(mango kde niri)
+
+usage() {
+    echo "Usage: apply-theme-profile <mango|kde|niri>" >&2
+    exit 2
+}
+
+[ $# -eq 1 ] || usage
+profile="$1"
+case " ${PROFILES[*]} " in
+    *" $profile "*) ;;
+    *) usage ;;
+esac
+
+src="$PROFILE_ROOT/$profile"
+
+atomic_copy() {
+    local from="$1" to="$2" tmpdir
+    tmpdir="$(dirname "$to")"
+    mkdir -p "$tmpdir"
+    local tmp
+    tmp="$(mktemp "$tmpdir/.stamp.XXXXXX")"
+    cp -a "$from" "$tmp"
+    mv -f "$tmp" "$to"
+}
+
+for ver in 3 4; do
+    [ -f "$src/gtk-$ver.0/settings.ini" ] && \
+        atomic_copy "$src/gtk-$ver.0/settings.ini" \
+            "$HOME/.config/gtk-$ver.0/settings.ini"
+done
+
+if [ -f "$src/gsettings.sh" ]; then
+    export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/$(id -u)/bus}"
+    # shellcheck disable=SC1090
+    source "$src/gsettings.sh"
+fi
+
+[ -f "$src/kitty/noctalia.conf" ] && \
+    atomic_copy "$src/kitty/noctalia.conf" \
+        "$HOME/.config/kitty/themes/noctalia.conf"
+
+[ -f "$src/noctalia-state.toml" ] && \
+    atomic_copy "$src/noctalia-state.toml" \
+        "${XDG_STATE_HOME:-$HOME/.local/state}/noctalia/settings.toml"
+
+echo "$(date '+%Y-%m-%d %H:%M:%S') applied=$profile" >> "${XDG_STATE_HOME:-$HOME/.local/state}/noctalia/.stamp.log"
+echo "Theme profile applied: $profile"

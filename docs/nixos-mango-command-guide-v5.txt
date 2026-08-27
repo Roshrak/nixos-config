@@ -37,18 +37,18 @@ IMPORTANT HARDWARE RULE
 ======================================================================
 
 A. Full system update + tests + GitHub upload:
-  ~/Downloads/update-system-and-push-v3.2.sh
+  ~/Downloads/update-system-and-push-v3.3.sh
 
 Run:
-  chmod +x ~/Downloads/update-system-and-push-v3.2.sh
-  ~/Downloads/update-system-and-push-v3.2.sh
+  chmod +x ~/Downloads/update-system-and-push-v3.3.sh
+  ~/Downloads/update-system-and-push-v3.3.sh
 
 B. GitHub backup only, without updating NixOS:
-  ~/Downloads/update-system-and-push-v3.2.sh --sync-only
+  ~/Downloads/update-system-and-push-v3.3.sh --sync-only
 
 Run:
-  chmod +x ~/Downloads/update-system-and-push-v3.2.sh --sync-only
-  ~/Downloads/update-system-and-push-v3.2.sh --sync-only
+  chmod +x ~/Downloads/update-system-and-push-v3.3.sh --sync-only
+  ~/Downloads/update-system-and-push-v3.3.sh --sync-only
 
 
 ======================================================================
@@ -147,8 +147,8 @@ REBOOT
 RECOMMENDED
   Use the supplied script instead of manually copying individual files:
 
-  chmod +x ~/Downloads/update-system-and-push-v3.2.sh
-  ~/Downloads/update-system-and-push-v3.2.sh
+  chmod +x ~/Downloads/update-system-and-push-v3.3.sh
+  ~/Downloads/update-system-and-push-v3.3.sh
 
 WHAT THAT SCRIPT DOES
   1. Backs up the existing flake.lock.
@@ -189,8 +189,8 @@ USE THIS WHEN
   like Mango, Noctalia, Kitty, LazyVim, Steam launcher, OBS paths, etc.
 
 COPY-PASTE
-  chmod +x ~/Downloads/update-system-and-push-v3.2.sh --sync-only
-  ~/Downloads/update-system-and-push-v3.2.sh --sync-only
+  chmod +x ~/Downloads/update-system-and-push-v3.3.sh --sync-only
+  ~/Downloads/update-system-and-push-v3.3.sh --sync-only
 
 The merged script in --sync-only mode stores a reusable snapshot under:
   ~/nixos-config/nixos/
@@ -780,10 +780,10 @@ The important principle stays the same:
 ======================================================================
 
 WHEN YOU CHANGE ONLY MANGO / NOCTALIA / USER CONFIG
-  ~/Downloads/update-system-and-push-v3.2.sh --sync-only
+  ~/Downloads/update-system-and-push-v3.3.sh --sync-only
 
 WHEN YOU WANT TO UPDATE EVERYTHING AND SAVE THE RESULT
-  ~/Downloads/update-system-and-push-v3.2.sh
+  ~/Downloads/update-system-and-push-v3.3.sh
 
 WHEN A REBUILD FAILS
   Do not reboot.
@@ -852,11 +852,11 @@ BACKUP / UPDATE SCRIPT
 
   Full system update + health check + GitHub snapshot:
 
-    ~/Downloads/update-system-and-push-v3.2.sh
+    ~/Downloads/update-system-and-push-v3.3.sh
 
   GitHub snapshot only, without updating NixOS:
 
-    ~/Downloads/update-system-and-push-v3.2.sh --sync-only
+    ~/Downloads/update-system-and-push-v3.3.sh --sync-only
 
 
 MANGO RELOAD

@@ -147,6 +147,14 @@ programs.noctalia-greeter = {
   xdg.portal.enable = true;
   services.flatpak.enable = true;
 
+  # Chromium policy: never nag about being the default browser.
+  # Declarative (was a manual /etc/chromium/... copy) so reinstalls keep it.
+  environment.etc."chromium/policies/managed/default-browser.json".text = ''
+    {
+      "DefaultBrowserSettingEnabled": false
+    }
+  '';
+
   environment.systemPackages = with pkgs; [
     # Main desktop apps
     kitty

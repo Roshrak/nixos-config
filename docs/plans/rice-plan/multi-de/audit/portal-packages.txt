@@ -1,0 +1,5 @@
+gnome-keyring.portal
+gtk.portal
+kde.portal
+kwallet.portal
+wlr.portal

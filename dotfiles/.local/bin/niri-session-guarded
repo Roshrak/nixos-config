@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# niri-session-guarded — Exec target for niri.desktop, replaces upstream
+# niri-session at the greeter layer.
+#
+# Invariant: the real niri-session refuses to run while `systemctl --user
+# is-active niri.service` reports anything but inactive. This wrapper makes
+# that true before exec'ing, handling every failure mode observed so far:
+#   * zombie compositor process whose wrapper tree greetd SIGTERMed
+#   * unit stuck in stop-post / deactivating from wedged teardown jobs
+#   * leftover failed state or stale runtime sockets
+#
+# Escalation ladder per attempt: stop unit -> TERM process -> wait 3 s ->
+# KILL -> wait for inactive. Never execs unless inactive is reached
+# (max ~3 attempts), because a blind exec just recreates the black screen.
+set -u
+
+UID_ME="$(id -u)"
+SYSTEMCTL=/run/current-system/sw/bin/systemctl
+PGREP=/run/current-system/sw/bin/pgrep
+PKILL=/run/current-system/sw/bin/pkill
+RM=/run/current-system/sw/bin/rm
+
+state() { "$SYSTEMCTL" --user is-active niri.service 2>/dev/null || true; }
+
+wait_inactive() { # $1 = max 0.1s ticks
+    local i=0
+    while [ $i -lt "$1" ]; do
+        case "$(state)" in inactive|unknown|failed) return 0 ;; esac
+        sleep 0.1; i=$((i+1))
+    done
+    return 1
+}
+
+force_cleanup() {
+    echo "niri-guard: leftover niri state detected (state=$(state)), cleaning"
+
+    "$SYSTEMCTL" --user stop niri.service 2>/dev/null || true
+    wait_inactive 30 || true
+
+    if "$PGREP" -u "$UID_ME" -x niri >/dev/null 2>&1; then
+        "$PKILL" -TERM -u "$UID_ME" -x niri 2>/dev/null
+        i=0
+        while "$PGREP" -u "$UID_ME" -x niri >/dev/null 2>&1 && [ $i -lt 30 ]; do
+            sleep 0.1; i=$((i+1))
+        done
+        "$PGREP" -u "$UID_ME" -x niri >/dev/null 2>&1 && \
+            "$PKILL" -KILL -u "$UID_ME" -x niri 2>/dev/null
+    fi
+
+    # Wedged transaction jobs block transitions forever; drop them all.
+    "$SYSTEMCTL" --user cancel 2>/dev/null || true
+
+    "$SYSTEMCTL" --user reset-failed 2>/dev/null || true
+    "$RM" -f "$XDG_RUNTIME_DIR"/niri*.sock* 2>/dev/null || true
+
+    # Let logind/DRM masters settle before handing the seat over.
+    sleep 0.3
+}
+
+attempt=0
+until [ "$(state)" = inactive ]; do
+    attempt=$((attempt+1))
+    [ $attempt -gt 3 ] && {
+        echo "niri-guard: FATAL: niri.service never reached inactive; aborting." >&2
+        exit 1
+    }
+    force_cleanup
+done
+
+exec /run/current-system/sw/bin/niri-session

@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# clean-stray-sessions
+# Reap cross-session strays whose single-instance locks would block this
+# session: app scopes left over from a FINISHED graphical session.
+# Scopes that are still active units belong to THIS or another healthy
+# login and are never touched.
+set -uo pipefail
+
+U="$(id -u)"
+removed=0
+
+# Active user scopes right now (bare unit names).
+active_units="$(systemctl --user list-units --type=scope --state=active --no-legend 2>/dev/null | awk '{print $1}')"
+
+for pid in $(pgrep -u "$U" -x chromium 2>/dev/null); do
+    # Last cgroup entry = the most specific slice the process lives in.
+    cgpath="$(sed -n 's|^0::\(.*\)$|\1|p' "/proc/$pid/cgroup" 2>/dev/null | tail -n1)"
+    unit="${cgpath##*/}"
+
+    if [ -n "$unit" ] && echo "$active_units" | grep -Fxq "$unit"; then
+        continue    # owned by a live scope -> legitimate
+    fi
+
+    kill -TERM "$pid" 2>/dev/null && removed=$((removed+1))
+done
+
+sleep 0.4
+pgrep -u "$U" -x chromium >/dev/null 2>&1 && pkill -KILL -u "$U" -x chromium 2>/dev/null
+
+# Drop singleton artifacts pointing at dead pids only.
+lock="$HOME/.config/chromium/SingletonLock"
+if [ -L "$lock" ]; then
+    lpid="$(readlink "$lock" | sed -E 's/^tonelico-nix-([0-9]+)$/\1/')"
+    case "$lpid" in ''|*[!0-9]*) : ;; *) kill -0 "$lpid" 2>/dev/null || rm -f \
+        "$HOME/.config/chromium/SingletonLock" \
+        "$HOME/.config/chromium/SingletonCookie" \
+        "$HOME/.config/chromium/SingletonSocket" ;; esac
+fi
+
+echo "clean-stray-sessions: reaped=$removed"

@@ -1,0 +1,9 @@
+00:02.0 VGA compatible controller: Intel Corporation Meteor Lake-P [Intel Graphics] (rev 08)
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/nvme0n1p2  468G  104G  340G  24% /
+NAME        FSTYPE MOUNTPOINTS
+zram0       swap   [SWAP]
+nvme0n1
+├─nvme0n1p1 vfat   /boot
+└─nvme0n1p2 ext4   /nix/store
+                   /
