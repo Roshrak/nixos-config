@@ -47,5 +47,15 @@ echo "── portals/system ─────────────────�
 ck "portal confs correct set"    "[ -e /etc/xdg/xdg-desktop-portal/mango-portals.conf ] && [ -e /etc/xdg/xdg-desktop-portal/niri-portals.conf ] && [ ! -e /etc/xdg/xdg-desktop-portal/i3-portals.conf ]"
 
 echo
+echo "── palette persistence (auto-save at session end) ───"
+ck "niri save drop-in exists"    "[ -f $HOME/.config/systemd/user/niri.service.d/save-profile.conf ]"
+ck "niri drop-in hooks save"     "grep -q 'save-noctalia-profile niri' $HOME/.config/systemd/user/niri.service.d/save-profile.conf"
+ck "mango wrapper exists"        "[ -x $HOME/.local/bin/mango-session-guarded ]"
+ck "mango wrapper traps TERM"    "grep -q 'trap on_exit EXIT TERM INT' $HOME/.local/bin/mango-session-guarded"
+ck "mango desktop -> wrapper"    "grep -q 'mango-session-guarded' /run/current-system/sw/share/wayland-sessions/mango.desktop"
+ck "niri desktop -> wrapper"     "grep -q 'niri-session-guarded' /run/current-system/sw/share/wayland-sessions/niri.desktop"
+ck "save script atomic-safe"     "grep -q 'mktemp' $HOME/.local/bin/save-noctalia-profile"
+ck "seeds diverged (isolation)"  "! diff -q $HOME/.config/theme-profiles/mango/noctalia-state.toml $HOME/.config/theme-profiles/niri/noctalia-state.toml >/dev/null"
+
 echo "RESULT: PASS=$P FAIL=$F"
 [ $F -eq 0 ]

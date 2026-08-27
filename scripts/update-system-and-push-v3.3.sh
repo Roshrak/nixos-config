@@ -433,6 +433,7 @@ for helper in \
     apply-theme-profile \
     clean-stray-sessions \
     niri-session-guarded \
+    mango-session-guarded \
     save-noctalia-profile \
     noctalia-greeter-sync-smart \
     mango-animation \
@@ -586,6 +587,10 @@ rm -f \
     fail "apply-theme-profile not copied"
 [ -f "$REPO/dotfiles/.local/bin/niri-session-guarded" ] ||
     fail "niri-session-guarded not copied"
+[ -f "$REPO/dotfiles/.local/bin/mango-session-guarded" ] ||
+    fail "mango-session-guarded not copied"
+[ -f "$REPO/dotfiles/.config/systemd/user/niri.service.d/save-profile.conf" ] ||
+    fail "niri save-profile drop-in not copied"
 [ -f "$REPO/dotfiles/.local/bin/clean-stray-sessions" ] ||
     fail "clean-stray-sessions not copied"
 [ -f "$RESTORE_MD" ] || fail "RESTORE-CURRENT.md missing"

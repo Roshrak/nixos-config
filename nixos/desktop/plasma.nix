@@ -33,6 +33,11 @@
           if [ "$base" = "niri.desktop" ]; then
             sed 's|^Exec=.*|Exec=/home/aesc/.local/bin/niri-session-guarded|' "$f" \
               > "$out/share/wayland-sessions/$base"
+          elif [ "$base" = "mango.desktop" ]; then
+            # Guarded wrapper: persists Noctalia state (palette source/scheme)
+            # into the mango seed at session end via trap-on-TERM.
+            sed 's|^Exec=.*|Exec=/home/aesc/.local/bin/mango-session-guarded|' "$f" \
+              > "$out/share/wayland-sessions/$base"
           else
             ln -s "$f" "$out/share/wayland-sessions/$base"
           fi

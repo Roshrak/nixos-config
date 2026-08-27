@@ -10,6 +10,9 @@ Rows=1
 [EdgeBarrier]
 EdgeBarrier=0
 
+[Effect-overview]
+BorderActivate=9
+
 [Tiling][94df4783-34d1-452f-9f0c-8b3f6b5b0f2b][fe93f910-aeb8-45e7-8698-b070af5239b5]
 padding=4
 tiles={"layoutDirection":"horizontal","tiles":[{"width":0.25},{"width":0.5},{"width":0.25}]}

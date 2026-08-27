@@ -109,6 +109,29 @@ Verification · Mango regression test · KDE regression test · Rollback.
   Canonical table: keybinds.md. fcitx5 unified to XDG autostart only.
 - Original/DWM toggle machinery purged completely per decision.
 
+## CHANGELOG — 2026-08-27 (round 6: palette auto-persistence)
+- ISSUE: in-session Noctalia changes (palette source, wallpaper scheme —
+  user switched to m3-fruit-salad) were wiped at every login because
+  apply-theme-profile stamps the frozen seed over live state, and
+  save-noctalia-profile was manual-only. Evidence: live settings.toml had
+  m3-fruit-salad, both seeds still vibrant.
+- FIX niri: user drop-in niri.service.d/save-profile.conf ->
+  ExecStopPost=save-noctalia-profile niri. Runs in the user manager when
+  the unit stops (logout/crash/greetd kill) — survives wrapper death;
+  pure file copy, no conflict risk (unlike the retracted ExecStopPost in
+  round 3, which started a conflicting target).
+- FIX mango: new ~/.local/bin/mango-session-guarded wraps the compositor
+  (foreground) with trap-on-TERM/EXIT firing save-noctalia-profile mango
+  during logind's pre-SIGKILL window; mango.desktop Exec patched via
+  dm-sessions-share (same meta.priority=1 mechanism as niri).
+- Niri seed refreshed NOW from live state (fruitsalad captured). Mango
+  seed gets fruitsalad on its first post-fix logout (or re-pick once).
+- verify.sh: +8 persistence checks (drop-in, wrapper trap, desktop Exec
+  wiring, atomic save, seed divergence). v3.3 script: helper + assert.
+- KDE unaffected: its profile has no noctalia-state.toml.
+- TEST REQUIRED: mango wrapper is now the session leader — run the full
+  cycle mango -> niri -> mango to prove session teardown still works.
+
 ## CHANGELOG — 2026-08-27 (round 5: tarball incident + repo rescue)
 - INCIDENT: v3.3 backed up the wrong path (rice-plan/backups vs actual
   rice-plan/multi-de/backups) -> 7.7GB of tarballs staged; .git grew to
