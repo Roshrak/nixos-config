@@ -174,7 +174,8 @@ done
 
 mkdir -p "$SNAPSHOT_WORK/baby-step/lib"
 for baby_file in \
-    README.txt check-system.sh rebuild-system.sh update-system.sh \
+    README.txt system-summary.txt system-summary-for-ai.md \
+    check-system.sh rebuild-system.sh update-system.sh \
     backup-config.sh update-and-push.sh; do
     if [ -f "$BABY_STEP_DIR/$baby_file" ]; then
         cp -a "$BABY_STEP_DIR/$baby_file" "$SNAPSHOT_WORK/baby-step/$baby_file"

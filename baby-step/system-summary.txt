@@ -1,0 +1,146 @@
+MY COMPUTER SUMMARY
+Last updated: 2026-08-31
+
+WHAT THIS FILE IS FOR
+
+Keep this file when asking an AI for help with this computer.
+For a much more detailed AI version, use:
+~/baby-step/system-summary-for-ai.md
+
+IMPORTANT NAMES
+
+Computer hostname:
+tonelico-nix
+
+NixOS flake name:
+tonelico
+
+They are NOT the same.
+The correct NixOS target is:
+/etc/nixos#tonelico
+
+MY SYSTEM
+
+NixOS: 26.05 (Yarara)
+Kernel: 7.2.1
+Computer: Acer Swift SFG16-72
+CPU: Intel Core Ultra 5 125U
+Graphics: Intel Meteor Lake integrated graphics
+Memory: 15 GiB
+Main drive: 468 GiB NVMe SSD
+Free space when checked: about 343 GiB
+Current NixOS generation: 57
+
+MY DESKTOPS
+
+The login screen is Noctalia Greeter using greetd.
+SDDM is intentionally turned off.
+
+I can choose:
+- Mango with Noctalia
+- KDE Plasma 6
+- Niri
+
+The current session when this file was made was Mango on Wayland.
+
+LANGUAGE INPUT
+
+Fcitx5, Unikey, and Fcitx5 Lotus are configured.
+Mango intentionally starts Fcitx5.
+Do not remove these Mango lines:
+
+env=QT_IM_MODULES,wayland;fcitx
+env=XMODIFIERS,@im=fcitx
+exec-once=fcitx5 -d
+
+KEYBOARD RECEIVER
+
+My 2.4 GHz receiver is:
+36b0:3002 RDMCTMZT Wireless 2.4G Dongle
+
+It once appeared as a game controller in Minecraft.
+A NixOS udev rule now removes the false joystick label.
+The fix was tested and is working.
+Do not use a fixed event number such as event9 because it can change.
+
+HEALTH WHEN LAST CHECKED
+
+Failed system services: 0
+Failed user services: 0
+Network and DNS: working
+Bluetooth: working
+Audio and microphone: working
+Mango: configuration valid
+Niri: configuration valid
+Noctalia: configuration valid
+Fcitx5: working
+Keyboard receiver fix: working
+Final health check: 14 out of 14 checks passed
+
+PROGRAMS I HAVE
+
+Important installed programs include:
+Codex, Claude Code, Python 3, Git, Chromium, Kitty, Neovim,
+Steam, OBS Studio, Flatpak, Prism Launcher, Discord, Obsidian,
+LibreOffice, virt-manager, Mango, Niri, KDE Plasma, and Noctalia.
+
+THE EASY COMMANDS
+
+Check if my computer is OK:
+~/baby-step/check-system.sh
+
+Update my computer:
+~/baby-step/update-system.sh
+
+Update and save my configuration to GitHub:
+~/baby-step/update-and-push.sh
+
+Rebuild without updating:
+~/baby-step/rebuild-system.sh
+
+Save a local configuration snapshot:
+~/baby-step/backup-config.sh
+
+WHERE IMPORTANT THINGS ARE
+
+Active NixOS configuration:
+/etc/nixos
+
+Git backup repository:
+/home/aesc/nixos-config
+
+GitHub:
+https://github.com/Roshrak/nixos-config
+
+Baby-step tools:
+/home/aesc/baby-step
+
+Detailed logs:
+/home/aesc/baby-step/logs
+
+Maintenance record:
+/home/aesc/baby-step/state/last-maintenance.txt
+
+Safety backups:
+/home/aesc/baby-step/backups
+
+IF AN UPDATE FAILS
+
+Do not run random commands.
+Copy the ERROR message and show it to Codex or ChatGPT.
+
+If a build fails before switching, my old system is still running.
+Nothing broken was activated.
+
+If a new system was activated and then broke, run:
+sudo nixos-rebuild switch --rollback
+
+If I cannot reach the login screen, restart and choose an older NixOS
+generation from the boot menu.
+
+TRASH CLEANUP
+
+The Trash was emptied and verified.
+Deleted items remaining: 0
+The 24 KiB Trash folder is only normal folder metadata.
+No Downloads, backups, caches, personal files, or Nix store files were deleted.
