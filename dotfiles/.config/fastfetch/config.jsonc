@@ -84,7 +84,8 @@
 
     {
       "type": "os",
-      "key": "{#bright_cyan}│ {icon}  OS        │{$4}│{$2}"
+      "key": "{#bright_cyan}│ {icon}  OS        │{$4}│{$2}",
+      "format": "{name} {version-id} (Morgan) {arch}"
     },
 
     {
