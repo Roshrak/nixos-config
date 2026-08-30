@@ -1,9 +1,24 @@
 // ============================================================
 // TONELICO NIRI
-// Independent session: owns its Noctalia state via
-// ~/.config/theme-profiles/niri (stamped before the shell starts).
+//
+// Independent Niri session.
+// Owns its Noctalia / GTK / Kitty theme state through:
+//
+//     ~/.config/theme-profiles/niri
+//
+// Visual goal:
+//   - DWM-like minimal windows
+//   - square corners
+//   - tiny gaps
+//   - very thin active/inactive borders
+//   - no shadows
+//   - focus follows mouse
 // ============================================================
 
+
+// ============================================================
+// ENVIRONMENT
+// ============================================================
 
 environment {
     DISPLAY ":0"
@@ -20,14 +35,45 @@ environment {
 // STARTUP
 // ============================================================
 
-// Isolation: stamp Niri's OWN Noctalia/GTK/kitty state BEFORE the shell
-// reads anything (absolute path: systemd-launched sessions lack
-// ~/.local/bin in PATH).
+// Apply Niri's own theme before Noctalia starts.
 spawn-at-startup "/home/aesc/.local/bin/apply-theme-profile" "niri"
+
+// Clean stale graphical sessions.
 spawn-at-startup "/home/aesc/.local/bin/clean-stray-sessions"
 
+// Desktop shell.
 spawn-at-startup "noctalia"
+
+// Authentication / privilege prompts.
 spawn-at-startup "/run/current-system/sw/bin/lxqt-policykit-agent"
+
+
+// ============================================================
+// OUTPUTS
+// ============================================================
+
+// External HDMI monitor.
+// Physical position: LEFT.
+//
+// 1920 × 1080
+// Vertically centered relative to the 1200px-high laptop panel.
+output "HDMI-A-1" {
+    mode "1920x1080@60.000"
+    scale 1
+
+    position x=0 y=60
+}
+
+// Internal laptop panel.
+// Physical position: RIGHT.
+//
+// 1920 × 1200
+output "eDP-1" {
+    mode "1920x1200@60.096"
+    scale 1
+
+    position x=1920 y=0
+}
 
 
 // ============================================================
@@ -51,11 +97,26 @@ input {
         dwt
     }
 
-    // Real sloppy-focus:
-    // whichever window the pointer enters gets keyboard focus.
+    // True sloppy-focus behavior:
     //
-    // Deliberately NO max-scroll-amount="0%".
+    // Move cursor onto a window
+    //          ↓
+    // that window receives keyboard focus.
     focus-follows-mouse
+}
+
+
+// ============================================================
+// GESTURES
+// ============================================================
+
+gestures {
+    // Disable:
+    //
+    // mouse → top-left corner → overview
+    hot-corners {
+        off
+    }
 }
 
 
@@ -69,59 +130,94 @@ overview {
 
 
 // ============================================================
-// DWM-LIKE WINDOW APPEARANCE
+// WINDOW LAYOUT
 // ============================================================
 
 layout {
-    // Mango DWM profile uses tiny gaps.
+    // Small DWM-like gaps.
     gaps 2
 
+    // Do not automatically center the focused column.
     center-focused-column "never"
 
-    // No thick Niri focus ring.
+
+    // --------------------------------------------------------
+    // Focus indicator
+    // --------------------------------------------------------
+
+    // Niri's normal focus ring is too thick.
+    // Disable it and use the window border instead.
     focus-ring {
         off
     }
 
-    // Thin square DWM-style window borders.
-    //
-    // Active window = blue.
-    // Inactive windows = dark gray.
+
+    // --------------------------------------------------------
+    // Window border
+    // --------------------------------------------------------
+
     border {
         on
+
+        // Very thin DWM-like border.
         width 0.5
 
+        // Focused window.
         active-color "#89b4fa"
+
+        // Unfocused windows.
         inactive-color "#45475a"
     }
 
-    // DWM-style flat appearance.
+
+    // --------------------------------------------------------
+    // Shadows
+    // --------------------------------------------------------
+
+    // Flat DWM-style windows.
     shadow {
         off
     }
 
-    // Closest equivalent to Mango's mfact = 0.62.
+
+    // --------------------------------------------------------
+    // Default width
+    // --------------------------------------------------------
+
+    // Approximation of Mango/DWM mfact = 0.62.
     default-column-width {
         proportion 0.62
     }
 }
 
 
-// Request compositor-side decorations where applications support it.
+// Prefer compositor-managed decorations.
+//
+// There are intentionally NO:
+//
+//     geometry-corner-radius
+//     clip-to-geometry
+//
+// rules.
+//
+// Windows stay square.
 prefer-no-csd
 
 
-// Keep rectangular window geometry.
-// No geometry-corner-radius.
-// No clip-to-geometry.
-// No rounded-window rules.
-
+// Draw the thin border separately from the application's background.
 window-rule {
     draw-border-with-background false
 }
+
+
+// ============================================================
+// HOTKEY OVERLAY
+// ============================================================
+
 hotkey-overlay {
     skip-at-startup
 }
+
 
 // ============================================================
 // SCREENSHOTS
@@ -135,14 +231,36 @@ screenshot-path "~/Pictures/Screenshots/Screenshot from %Y-%m-%d %H-%M-%S.png"
 // ============================================================
 
 binds {
+
+    // --------------------------------------------------------
+    // Help
+    // --------------------------------------------------------
+
     Mod+Shift+Slash {
         show-hotkey-overlay;
     }
 
 
-    // --------------------------------------------------------
-    // Applications / Noctalia
-    // --------------------------------------------------------
+    // ========================================================
+    // MOUSE WINDOW NAVIGATION
+    // ========================================================
+
+    // Mod + Shift + wheel down
+    // → next/right window column.
+    Mod+Shift+WheelScrollDown cooldown-ms=10 {
+        focus-column-right;
+    }
+
+    // Mod + Shift + wheel up
+    // → previous/left window column.
+    Mod+Shift+WheelScrollUp cooldown-ms=10 {
+        focus-column-left;
+    }
+
+
+    // ========================================================
+    // APPLICATIONS / NOCTALIA
+    // ========================================================
 
     Mod+Return {
         spawn "kitty";
@@ -176,6 +294,19 @@ binds {
         spawn "noctalia" "msg" "panel-toggle" "session";
     }
 
+    Mod+V {
+        spawn "noctalia" "msg" "panel-toggle" "clipboard";
+    }
+
+    Alt+Tab {
+        spawn "noctalia" "msg" "window-switcher";
+    }
+
+
+    // ========================================================
+    // SCREENSHOTS
+    // ========================================================
+
     Print {
         spawn "noctalia" "msg" "screenshot-region";
     }
@@ -188,43 +319,42 @@ binds {
         screenshot-window;
     }
 
-    Mod+V {
-        spawn "noctalia" "msg" "panel-toggle" "clipboard";
-    }
 
-    Alt+Tab {
-        spawn "noctalia" "msg" "window-switcher";
-    }
+    // ========================================================
+    // WINDOW CONTROL
+    // ========================================================
 
-
-    // --------------------------------------------------------
-    // Window control
-    // --------------------------------------------------------
-
+    // Close focused window.
     Mod+Q {
         close-window;
     }
 
+    // Normal maximize.
+    //
+    // Fills the usable monitor area and restores on toggle.
     Mod+M {
-        maximize-column;
+        maximize-window-to-edges;
     }
 
+    // True fullscreen.
     Mod+F {
         fullscreen-window;
     }
 
+    // Floating / tiled.
     Mod+Shift+F {
         toggle-window-floating;
     }
 
+    // Quit Niri.
     Mod+Shift+Alt+M {
         quit;
     }
 
 
-    // --------------------------------------------------------
-    // Focus
-    // --------------------------------------------------------
+    // ========================================================
+    // WINDOW FOCUS
+    // ========================================================
 
     Mod+H {
         focus-column-left;
@@ -247,9 +377,9 @@ binds {
     }
 
 
-    // --------------------------------------------------------
-    // Move / swap
-    // --------------------------------------------------------
+    // ========================================================
+    // MOVE / SWAP WINDOWS
+    // ========================================================
 
     Mod+Ctrl+H {
         move-column-left;
@@ -268,29 +398,91 @@ binds {
     }
 
 
+    // ========================================================
+    // WORKSPACES
+    // ========================================================
+
+    Mod+1 {
+        focus-workspace 1;
+    }
+
+    Mod+2 {
+        focus-workspace 2;
+    }
+
+    Mod+3 {
+        focus-workspace 3;
+    }
+
+    Mod+4 {
+        focus-workspace 4;
+    }
+
+    Mod+5 {
+        focus-workspace 5;
+    }
+
+    Mod+6 {
+        focus-workspace 6;
+    }
+
+    Mod+7 {
+        focus-workspace 7;
+    }
+
+    Mod+8 {
+        focus-workspace 8;
+    }
+
+    Mod+9 {
+        focus-workspace 9;
+    }
+
+
     // --------------------------------------------------------
-    // Workspaces
+    // Move window/column to workspace
     // --------------------------------------------------------
 
-    Mod+1 { focus-workspace 1; }
-    Mod+2 { focus-workspace 2; }
-    Mod+3 { focus-workspace 3; }
-    Mod+4 { focus-workspace 4; }
-    Mod+5 { focus-workspace 5; }
-    Mod+6 { focus-workspace 6; }
-    Mod+7 { focus-workspace 7; }
-    Mod+8 { focus-workspace 8; }
-    Mod+9 { focus-workspace 9; }
+    Mod+Shift+1 {
+        move-column-to-workspace 1;
+    }
 
-    Mod+Shift+1 { move-column-to-workspace 1; }
-    Mod+Shift+2 { move-column-to-workspace 2; }
-    Mod+Shift+3 { move-column-to-workspace 3; }
-    Mod+Shift+4 { move-column-to-workspace 4; }
-    Mod+Shift+5 { move-column-to-workspace 5; }
-    Mod+Shift+6 { move-column-to-workspace 6; }
-    Mod+Shift+7 { move-column-to-workspace 7; }
-    Mod+Shift+8 { move-column-to-workspace 8; }
-    Mod+Shift+9 { move-column-to-workspace 9; }
+    Mod+Shift+2 {
+        move-column-to-workspace 2;
+    }
+
+    Mod+Shift+3 {
+        move-column-to-workspace 3;
+    }
+
+    Mod+Shift+4 {
+        move-column-to-workspace 4;
+    }
+
+    Mod+Shift+5 {
+        move-column-to-workspace 5;
+    }
+
+    Mod+Shift+6 {
+        move-column-to-workspace 6;
+    }
+
+    Mod+Shift+7 {
+        move-column-to-workspace 7;
+    }
+
+    Mod+Shift+8 {
+        move-column-to-workspace 8;
+    }
+
+    Mod+Shift+9 {
+        move-column-to-workspace 9;
+    }
+
+
+    // --------------------------------------------------------
+    // Horizontal focus
+    // --------------------------------------------------------
 
     Mod+Left {
         focus-column-left;
@@ -300,6 +492,11 @@ binds {
         focus-column-right;
     }
 
+
+    // --------------------------------------------------------
+    // Workspace scroll
+    // --------------------------------------------------------
+
     Mod+WheelScrollUp {
         focus-workspace-up;
     }
@@ -308,14 +505,24 @@ binds {
         focus-workspace-down;
     }
 
+
+    // --------------------------------------------------------
+    // Overview
+    // --------------------------------------------------------
+
+    // Overview is manual only.
+    // Hot corner is disabled above.
     Mod+O {
         toggle-overview;
     }
 
 
-    // --------------------------------------------------------
-    // Monitors
-    // --------------------------------------------------------
+    // ========================================================
+    // MONITORS
+    // ========================================================
+
+    // HDMI is physically LEFT.
+    // Laptop is physically RIGHT.
 
     Mod+Alt+Left {
         focus-monitor-left;
@@ -324,6 +531,11 @@ binds {
     Mod+Alt+Right {
         focus-monitor-right;
     }
+
+
+    // --------------------------------------------------------
+    // Move columns between monitors
+    // --------------------------------------------------------
 
     Mod+Alt+Shift+Left {
         move-column-to-monitor-left;
@@ -341,6 +553,11 @@ binds {
         move-column-to-monitor-right;
     }
 
+
+    // --------------------------------------------------------
+    // Vertical monitor movement
+    // --------------------------------------------------------
+
     Mod+Shift+Up {
         move-window-to-monitor-up;
     }
@@ -350,9 +567,9 @@ binds {
     }
 
 
-    // --------------------------------------------------------
-    // Hardware / media
-    // --------------------------------------------------------
+    // ========================================================
+    // AUDIO
+    // ========================================================
 
     XF86AudioRaiseVolume {
         spawn "wpctl" "set-volume" "@DEFAULT_SINK@" "5%+";
@@ -370,6 +587,11 @@ binds {
         spawn "noctalia" "msg" "mic-mute";
     }
 
+
+    // ========================================================
+    // BRIGHTNESS
+    // ========================================================
+
     XF86MonBrightnessUp {
         spawn "noctalia" "msg" "brightness-up";
     }
@@ -377,6 +599,11 @@ binds {
     XF86MonBrightnessDown {
         spawn "noctalia" "msg" "brightness-down";
     }
+
+
+    // ========================================================
+    // MEDIA
+    // ========================================================
 
     XF86AudioPlay {
         spawn "noctalia" "msg" "media" "toggle";

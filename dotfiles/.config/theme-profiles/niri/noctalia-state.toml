@@ -134,7 +134,7 @@ password_style = "random"
     transparency_mode = "glass"
 
 [theme]
-builtin = "Noctalia"
+builtin = "Ayu"
 community_palette = "Oxocarbon"
 custom_palette = "konachan-com-362509-bikini-bow-braids-breasts-bunny-fang-flowers-gray-eyes-headdress-long-hair-navel-red-hair-ribbons-rose-signed-swimsuit-thighhighs-wristwear-vib"
 mode = "dark"
@@ -155,7 +155,7 @@ directory = "/home/aesc/Pictures/Wallpapers"
     path = "/home/aesc/Pictures/Wallpapers/wallhaven-5ykdq8.png"
 
     [wallpaper.monitors.HDMI-A-1]
-    path = "/home/aesc/Pictures/Wallpapers/pexels-lauripoldre-24963115.jpg"
+    path = "/home/aesc/Pictures/Wallpapers/wallhaven-5ykdq8.png"
 
     [wallpaper.monitors.eDP-1]
     path = "/home/aesc/Pictures/Wallpapers/wallhaven-5ykdq8.png"
@@ -164,7 +164,37 @@ directory = "/home/aesc/Pictures/Wallpapers"
     palette_source = "wallpaper"
     path = "/home/aesc/Pictures/Wallpapers/wallhaven-5ykdq8.png"
     theme_mode = "dark"
-    wallpaper_scheme = "vibrant"
+    wallpaper_scheme = "m3-fruit-salad"
+
+    [[wallpaper.favorite]]
+    palette_source = "wallpaper"
+    path = "/home/aesc/Pictures/Wallpapers/__morgan_le_fay_fate_and_1_more_drawn_by_mochi_upamo__5a0064b23658cf009024bdb8bb13c707.jpg"
+    theme_mode = "dark"
+    wallpaper_scheme = "m3-fruit-salad"
+
+    [[wallpaper.favorite]]
+    palette_source = "wallpaper"
+    path = "/home/aesc/Pictures/Wallpapers/__morgan_le_fay_and_aesc_fate_and_1_more_drawn_by_mento__f67538d98eaf6f373f3f6e0eb1ba8d49.jpg"
+    theme_mode = "dark"
+    wallpaper_scheme = "m3-fruit-salad"
+
+    [[wallpaper.favorite]]
+    palette_source = "wallpaper"
+    path = "/home/aesc/Pictures/Wallpapers/__morgan_le_fay_and_aesc_fate_and_1_more_drawn_by_antinese__70c1f8a98bb2390d224d09920b6242d0.jpg"
+    theme_mode = "dark"
+    wallpaper_scheme = "m3-content"
+
+    [[wallpaper.favorite]]
+    palette_source = "wallpaper"
+    path = "/home/aesc/Pictures/Wallpapers/flower_sunflower_artificial_119551_1920x1200.jpg"
+    theme_mode = "dark"
+    wallpaper_scheme = "m3-content"
+
+    [[wallpaper.favorite]]
+    palette_source = "wallpaper"
+    path = "/home/aesc/Pictures/Wallpapers/120523661_p0.jpg"
+    theme_mode = "dark"
+    wallpaper_scheme = "m3-fruit-salad"
 
 [widget.network]
 show_label = false

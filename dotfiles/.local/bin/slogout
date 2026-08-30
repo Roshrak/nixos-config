@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ -z "${XDG_SESSION_ID:-}" ]; then
+    echo "ERROR: XDG_SESSION_ID is not set." >&2
+    exit 1
+fi
+
+exec loginctl terminate-session "$XDG_SESSION_ID"

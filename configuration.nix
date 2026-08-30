@@ -65,6 +65,12 @@ programs.noctalia-greeter = {
 };
   services.xserver.desktopManager.runXdgAutostartIfNone = true;
 
+  services.udev.extraRules = ''
+    # RDMCTMZT 36b0:3002 — prevent fake gamepad detection.
+    SUBSYSTEM=="input", KERNEL=="event*", ATTRS{idVendor}=="36b0", ATTRS{idProduct}=="3002", ENV{ID_INPUT_JOYSTICK}=="1", ENV{ID_INPUT_JOYSTICK}=""
+    KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="36b0", ATTRS{idProduct}=="3009", MODE="0660", GROUP="users", TAG+="uaccess"
+  '';
+
   # Noctalia supplies the bar, launcher, notifications, control center,
   # wallpaper, lock screen, OSD, tray, and clipboard history.
   programs.noctalia = {
@@ -184,15 +190,13 @@ programs.noctalia-greeter = {
     vulkan-tools
     libva-utils
 
-    # Keyboard
-    via
-
     # Everyday CLI tools
     git
     curl
     wget
     unzip
     zip
+    python3
     nano
     neovim
     fastfetch
@@ -206,26 +210,12 @@ programs.noctalia-greeter = {
     smartmontools
     nvme-cli
     xdg-utils
-    xdg-user-dirs
-
-    # Keyboard configurator
-    via
+    codex
 
     # Icons
     adwaita-icon-theme
     papirus-icon-theme
   ];
-
-
-  hardware.keyboard.qmk.enable = true;
-
-  services.udev.packages = [
-    pkgs.via
-  ];
-
-  services.udev.extraRules = ''
-    KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="36b0", ATTRS{idProduct}=="3009", MODE="0660", GROUP="users", TAG+="uaccess"
-  '';
 
   system.stateVersion = "26.05";
   services.cloudflare-warp.enable = true;

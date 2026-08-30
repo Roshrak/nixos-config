@@ -11,6 +11,7 @@
       url = "github:noctalia-dev/noctalia-greeter";
       inputs.nixpkgs.follows = "nixpkgs";
     }; 
+    claude-code-nix.url = "github:sadjow/claude-code-nix";
   };
 
   outputs = inputs@{ nixpkgs, mango, noctalia, ... }: {
@@ -26,6 +27,7 @@
         inputs.noctalia-greeter.nixosModules.default
         inputs.lotus.nixosModules.fcitx5-lotus
         ./apps-and-lotus.nix
+        ./claude-code.nix
         ./windows-vm.nix
         ./desktop/plasma.nix      # KDE Plasma 6 second session
         ./desktop/niri.nix        # Niri third session (Phase 5)
