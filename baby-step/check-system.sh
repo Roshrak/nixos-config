@@ -6,7 +6,21 @@ SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 # shellcheck source=lib/common.sh
 . "$SCRIPT_DIR/lib/common.sh"
 
+case "${1:-}" in
+    "") ;;
+    -h|--help)
+        printf 'Run a read-only health check and save its log and result.\n'
+        printf 'Run: %s\n' "$HOME/baby-step/check-system.sh"
+        exit 0
+        ;;
+    *)
+        printf 'ERROR: Unknown option: %s\n' "$1" >&2
+        exit 2
+        ;;
+esac
+
 start_log "check"
+acquire_maintenance_lock
 
 warnings=0
 failures=0
@@ -27,6 +41,18 @@ fail_check() {
     failures=$((failures + 1))
     printf 'FAILED: %s\n' "$*" >> "$LOG_FILE"
 }
+
+if ! require_commands \
+    nix jq hostname nixos-rebuild systemctl nmcli getent timeout mango niri \
+    noctalia busctl rg fcitx5-remote wpctl udevadm df awk git; then
+    printf 'ERROR: A command required by the health check is missing.\n' >&2
+    printf 'See the detailed log: %s\n' "$LOG_FILE" >&2
+    write_maintenance_state \
+        "Read-only health check" "Health check could not run" \
+        "Required-command preflight" "Only the health log and maintenance state" \
+        "One or more required commands are missing; see $LOG_FILE"
+    exit 2
+fi
 
 printf 'Checking this computer. This does not change system settings.\n\n'
 
@@ -150,14 +176,16 @@ else
 fi
 
 show_step 12 "$TOTAL" "Checking disk space"
-root_used="$(df -P / | awk 'NR == 2 { gsub(/%/, "", $5); print $5 }')"
-printf 'Root filesystem used: %s%%\n' "$root_used" >> "$LOG_FILE"
-if [ "$root_used" -lt 85 ]; then
+root_used="$(df -P / 2>> "$LOG_FILE" | awk 'NR == 2 { gsub(/%/, "", $5); print $5 }')"
+printf 'Root filesystem used: %s%%\n' "${root_used:-unknown}" >> "$LOG_FILE"
+if [[ "$root_used" =~ ^[0-9]+$ ]] && [ "$root_used" -lt 85 ]; then
     ok
-elif [ "$root_used" -lt 95 ]; then
+elif [[ "$root_used" =~ ^[0-9]+$ ]] && [ "$root_used" -lt 95 ]; then
     warn "root filesystem usage is ${root_used}%"
-else
+elif [[ "$root_used" =~ ^[0-9]+$ ]]; then
     fail_check "root filesystem usage is critically high at ${root_used}%"
+else
+    fail_check "could not determine root filesystem usage"
 fi
 
 show_step 13 "$TOTAL" "Checking important commands"
@@ -180,8 +208,9 @@ if [ ! -d "$BACKUP_REPO/.git" ]; then
 else
     git_name="$(git -C "$BACKUP_REPO" config --get user.name || true)"
     git_email="$(git -C "$BACKUP_REPO" config --get user.email || true)"
-    git_changes="$(git -C "$BACKUP_REPO" status --porcelain 2>> "$LOG_FILE" || true)"
-    if [ -z "$git_name" ] || [ -z "$git_email" ]; then
+    if ! git_changes="$(git -C "$BACKUP_REPO" status --porcelain 2>> "$LOG_FILE")"; then
+        fail_check "could not query the Git backup repository"
+    elif [ -z "$git_name" ] || [ -z "$git_email" ]; then
         warn "Git author identity is not configured"
     elif [ -n "$git_changes" ]; then
         warn "the Git backup has changes that are not yet committed"
@@ -196,12 +225,18 @@ if [ "$failures" -eq 0 ] && [ "$warnings" -eq 0 ]; then
     result="Healthy"
     warning_text="None"
     exit_status=0
+elif [ "$failures" -eq 0 ]; then
+    printf 'SYSTEM NEEDS ATTENTION\n'
+    printf 'Failed checks: %s; warnings: %s\n' "$failures" "$warnings"
+    result="Healthy with warnings"
+    warning_text="$failures failed checks; $warnings warnings. See $LOG_FILE"
+    exit_status=1
 else
     printf 'SYSTEM NEEDS ATTENTION\n'
     printf 'Failed checks: %s; warnings: %s\n' "$failures" "$warnings"
-    result="Needs attention"
+    result="Failed checks require attention"
     warning_text="$failures failed checks; $warnings warnings. See $LOG_FILE"
-    exit_status=1
+    exit_status=2
 fi
 
 printf 'Detailed log: %s\n' "$LOG_FILE"

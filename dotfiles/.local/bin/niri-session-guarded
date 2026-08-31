@@ -34,7 +34,7 @@ wait_inactive() { # $1 = max 0.1s ticks
 force_cleanup() {
     echo "niri-guard: leftover niri state detected (state=$(state)), cleaning"
 
-    "$SYSTEMCTL" --user stop niri.service 2>/dev/null || true
+    "$SYSTEMCTL" --user --no-block stop niri.service 2>/dev/null || true
     wait_inactive 30 || true
 
     if "$PGREP" -u "$UID_ME" -x niri >/dev/null 2>&1; then
@@ -47,8 +47,15 @@ force_cleanup() {
             "$PKILL" -KILL -u "$UID_ME" -x niri 2>/dev/null
     fi
 
-    # Wedged transaction jobs block transitions forever; drop them all.
-    "$SYSTEMCTL" --user cancel 2>/dev/null || true
+    # A wedged niri transaction can block its next start; cancel only its job IDs.
+    jobs="$("$SYSTEMCTL" --user list-jobs --no-legend 2>/dev/null || true)"
+    while read -r job_id job_unit _; do
+        [ "$job_unit" = "niri.service" ] || continue
+        case "$job_id" in
+            ''|*[!0-9]*) continue ;;
+        esac
+        "$SYSTEMCTL" --user cancel "$job_id" 2>/dev/null || true
+    done <<< "$jobs"
 
     "$SYSTEMCTL" --user reset-failed 2>/dev/null || true
     "$RM" -f "$XDG_RUNTIME_DIR"/niri*.sock* 2>/dev/null || true

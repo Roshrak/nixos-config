@@ -1,162 +1,57 @@
 MY COMPUTER SUMMARY
-Last updated: 2026-08-31
+Updated: 2026-08-31 ~22:40 +07:00
 
-WHAT THIS FILE IS FOR
+No secrets in this file (no passwords, keys, tokens, Wi-Fi names, IPs).
+It does show my username, computer model, and GitHub repo name.
 
-Keep this file when asking an AI for help with this computer.
-For a much more detailed AI version, use:
-~/baby-step/system-summary-for-ai.md
+MACHINE
 
-IMPORTANT NAMES
+Hostname: tonelico-nix    Flake name: tonelico  (NOT the same)
+Correct target: /etc/nixos#tonelico
+NixOS 26.05, generation 58. Acer Swift SFG16-72, Intel Core Ultra 5 125U.
+Disk: 468 GiB NVMe, about 339 GiB free. /boot: about 914 MiB free.
+Login screen: Noctalia Greeter. Sessions: Mango+Noctalia, Plasma 6, Niri.
+Current session when updated: Niri on Wayland.
 
-Computer hostname:
-tonelico-nix
+HEALTH (checked 2026-08-31)
 
-NixOS flake name:
-tonelico
+0 failed checks. 0 failed services. Network, audio, Bluetooth: OK.
+1 expected warning: my Git backup has repaired files not committed yet.
 
-They are NOT the same.
-The correct NixOS target is:
-/etc/nixos#tonelico
+WHAT I USUALLY RUN
 
-MY SYSTEM
+Check computer:   ~/baby-step/check-system.sh
+Update computer:  ~/baby-step/update-system.sh
+Update + GitHub:  ~/baby-step/update-and-push.sh
+Rebuild only:     ~/baby-step/rebuild-system.sh
+Local snapshot:   ~/baby-step/backup-config.sh
 
-NixOS: 26.05.20260829.c5c4a43 (Yarara)
-Kernel: 7.2.2
-Computer: Acer Swift SFG16-72
-CPU: Intel Core Ultra 5 125U
-Graphics: Intel Meteor Lake integrated graphics
-Memory: 15 GiB
-Main drive: 468 GiB NVMe SSD
-Free space when checked: about 341 GiB
-Current NixOS generation: 58
+SAFE TESTS (no update, switch, commit, or push)
 
-MY DESKTOPS
+~/baby-step/check-system.sh                 -> expect: 0 failed checks; 1 warning
+~/baby-step/update-system.sh --check-only   -> expect: SUCCESS
+~/baby-step/backup-config.sh --check-only   -> expect: SUCCESS
+~/baby-step/update-and-push.sh --check-only -> expect: SUCCESS
 
-The login screen is Noctalia Greeter using greetd.
-SDDM is intentionally turned off.
+WHAT HAPPENED ON 2026-08-31
 
-I can choose:
-- Mango with Noctalia
-- KDE Plasma 6
-- Niri
+An audit found 0 critical problems and fixed 12 maintenance-script problems
+(wrong Git paths, false success messages, unsafe backups, overlapping runs,
+browser/session cleanup). The laptop itself needed no repair.
+Nothing was updated, built, switched, committed, or pushed.
 
-The current session when this file was made was Mango on Wayland.
+STILL TO DO (next session, with my approval)
 
-LANGUAGE INPUT
+1. Commit and push the repaired files in ~/nixos-config.
+   The script shows the changes and asks me to type PUSH first.
+2. Later: normal update with ~/baby-step/update-system.sh.
 
-Fcitx5, Unikey, and Fcitx5 Lotus are configured.
-Mango intentionally starts Fcitx5.
-Do not remove these Mango lines:
+IF SOMETHING FAILS
 
-env=QT_IM_MODULES,wayland;fcitx
-env=XMODIFIERS,@im=fcitx
-exec-once=fcitx5 -d
+Build failed -> old system still running, nothing broken.
+New system broke but terminal works: sudo nixos-rebuild switch --rollback
+Cannot reach login: reboot, choose older generation in boot menu.
+Anything else: stop, copy the ERROR, ask an AI. Logs: ~/baby-step/logs
 
-KEYBOARD RECEIVER
-
-My 2.4 GHz receiver is:
-36b0:3002 RDMCTMZT Wireless 2.4G Dongle
-
-It once appeared as a game controller in Minecraft.
-A NixOS udev rule now removes the false joystick label.
-The fix was tested and is working.
-Do not use a fixed event number such as event9 because it can change.
-
-HEALTH WHEN LAST CHECKED
-
-Failed system services: 0
-Failed user services: 0
-Network and DNS: working
-Bluetooth: working
-Audio and microphone: working
-Mango: configuration valid
-Niri: configuration valid
-Noctalia: configuration valid
-Fcitx5: working
-Keyboard receiver fix: working
-Final health check: 14 out of 14 checks passed
-
-PROGRAMS I HAVE
-
-Important installed programs include:
-Codex, Claude Code, Python 3, Git, Chromium, Kitty, Neovim,
-Steam, OBS Studio, Flatpak, Prism Launcher, Discord, Obsidian,
-LibreOffice, virt-manager, Mango, Niri, KDE Plasma, and Noctalia.
-
-THE EASY COMMANDS
-
-Check if my computer is OK:
-~/baby-step/check-system.sh
-
-Update my computer:
-~/baby-step/update-system.sh
-
-Update and save my configuration to GitHub:
-~/baby-step/update-and-push.sh
-
-Rebuild without updating:
-~/baby-step/rebuild-system.sh
-
-Save a local configuration snapshot:
-~/baby-step/backup-config.sh
-
-WHERE IMPORTANT THINGS ARE
-
-Active NixOS configuration:
-/etc/nixos
-
-Git backup repository:
-/home/aesc/nixos-config
-
-GitHub:
-https://github.com/Roshrak/nixos-config
-
-Baby-step tools:
-/home/aesc/baby-step
-
-Detailed logs:
-/home/aesc/baby-step/logs
-
-Maintenance record:
-/home/aesc/baby-step/state/last-maintenance.txt
-
-Safety backups:
-/home/aesc/baby-step/backups
-
-MOVE OR INSTALL THIS SYSTEM ON ANOTHER COMPUTER
-
-Complete beginner guide:
-~/nixos-config/docs/MIGRATION-INSTALL.md
-
-Safe setup script:
-~/nixos-config/scripts/bootstrap-nixos.sh
-
-The repository uses separate host profiles under:
-~/nixos-config/nixos/hosts
-
-The current profile is named tonelico, but its hostname is tonelico-nix.
-Every machine keeps its own generated hardware-configuration.nix.
-Do not copy Tonelico's hardware file onto unrelated hardware.
-
-IF AN UPDATE FAILS
-
-Do not run random commands.
-Copy the ERROR message and show it to Codex or ChatGPT.
-
-If a build fails before switching, my old system is still running.
-Nothing broken was activated.
-
-If a new system was activated and then broke, run:
-sudo nixos-rebuild switch --rollback
-
-If I cannot reach the login screen, restart and choose an older NixOS
-generation from the boot menu.
-
-TRASH CLEANUP
-
-The Trash was emptied and verified.
-10 items (about 11 MiB) were permanently removed.
-Deleted items remaining: 0
-The 24 KiB Trash folder is only normal folder metadata.
-No Downloads, backups, caches, personal files, or Nix store files were deleted.
+FOR AN AI: show it this file first. If it needs more:
+~/baby-step/system-summary-for-ai.md and ~/baby-step/state/audit-2026-08-31.txt

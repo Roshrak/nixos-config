@@ -28,8 +28,10 @@ if [ "${EUID:-$(id -u)}" -eq 0 ]; then
 fi
 
 start_log "rebuild"
+acquire_maintenance_lock
 TOTAL=7
 BUILD_WORK=""
+active_before="$(readlink -f /run/current-system)"
 
 cleanup() {
     if [ -n "$BUILD_WORK" ]; then
@@ -98,7 +100,13 @@ if [ "$build_only" -eq 1 ]; then
     show_step 5 "$TOTAL" "Keeping the current running generation"
     show_ok
     show_step 6 "$TOTAL" "Checking that no switch occurred"
-    show_ok
+    active_after="$(readlink -f /run/current-system)"
+    if [ "$active_after" = "$active_before" ]; then
+        show_ok
+    else
+        show_failed
+        fatal "The active system changed unexpectedly during the build-only test"
+    fi
     show_step 7 "$TOTAL" "Saving maintenance status"
     write_maintenance_state "NixOS build-only test" "Build succeeded; not activated" \
         "Flake detection, evaluation, candidate build" "Only log and state files" \
@@ -111,8 +119,16 @@ fi
 
 show_step 5 "$TOTAL" "Activating the successfully built system"
 if run_logged "NixOS switch" sudo nixos-rebuild switch --flake "$FLAKE_TARGET"; then
-    show_ok
     active_system="$(readlink -f /run/current-system)"
+    if [ -z "$built_system" ] || [ "$active_system" != "$built_system" ]; then
+        show_failed
+        write_maintenance_state "NixOS rebuild" \
+            "Switch completed with a system different from the validated candidate" \
+            "Flake detection, evaluation, candidate build, switch, artifact comparison" \
+            "/run/current-system changed" "Stop and inspect $LOG_FILE"
+        fatal "The active system does not match the validated build."
+    fi
+    show_ok
     record_success switch "$FLAKE_TARGET -> $active_system"
 else
     show_failed
@@ -123,15 +139,27 @@ else
 fi
 
 show_step 6 "$TOTAL" "Checking services after activation"
-system_failed="$(systemctl --failed --no-legend --plain 2>> "$LOG_FILE" || true)"
-user_failed="$(systemctl --user --failed --no-legend --plain 2>> "$LOG_FILE" || true)"
-if [ -z "$system_failed" ] && [ -z "$user_failed" ]; then
+service_query_failed=0
+if ! system_failed="$(systemctl --failed --no-legend --plain 2>> "$LOG_FILE")"; then
+    service_query_failed=1
+    system_failed=""
+fi
+if ! user_failed="$(systemctl --user --failed --no-legend --plain 2>> "$LOG_FILE")"; then
+    service_query_failed=1
+    user_failed=""
+fi
+if [ "$service_query_failed" -eq 0 ] &&
+   [ -z "$system_failed" ] && [ -z "$user_failed" ]; then
     show_ok
     service_warning="None"
 else
     show_warning
     printf '%s\n%s\n' "$system_failed" "$user_failed" >> "$LOG_FILE"
-    service_warning="The system switched, but one or more services failed; see $LOG_FILE"
+    if [ "$service_query_failed" -ne 0 ]; then
+        service_warning="The system switched, but service health could not be queried; see $LOG_FILE"
+    else
+        service_warning="The system switched, but one or more services failed; see $LOG_FILE"
+    fi
 fi
 
 show_step 7 "$TOTAL" "Saving maintenance status"
@@ -140,7 +168,11 @@ write_maintenance_state "NixOS rebuild and switch" "Build and switch succeeded" 
     "/run/current-system and NixOS generation" "$service_warning"
 show_ok
 
-printf '\nSUCCESS: The NixOS rebuild completed correctly.\n'
+if [ "$service_warning" = "None" ]; then
+    printf '\nSUCCESS: The NixOS rebuild completed correctly.\n'
+else
+    printf '\nREBUILD COMPLETED, BUT THE SYSTEM NEEDS ATTENTION.\n'
+fi
 printf 'Active system: %s\n' "$(readlink -f /run/current-system)"
 printf 'Detailed log: %s\n' "$LOG_FILE"
 

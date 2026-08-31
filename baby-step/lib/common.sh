@@ -13,6 +13,7 @@ BACKUP_DIR="$BABY_STEP_DIR/backups"
 LOG_FILE=""
 FLAKE_ATTR=""
 FLAKE_TARGET=""
+MAINTENANCE_LOCK_FD="${MAINTENANCE_LOCK_FD:-}"
 
 ensure_baby_dirs() {
     mkdir -p "$LOG_DIR" "$STATE_DIR" "$BACKUP_DIR"
@@ -22,13 +23,44 @@ start_log() {
     local kind="$1"
     local stamp
 
-    ensure_baby_dirs
+    if ! ensure_baby_dirs; then
+        printf 'ERROR: Could not create maintenance directories under %s\n' \
+            "$BABY_STEP_DIR" >&2
+        exit 1
+    fi
     stamp="$(date +%F-%H%M%S)"
     LOG_FILE="$LOG_DIR/${kind}-${stamp}.log"
-    : > "$LOG_FILE"
-    chmod 600 "$LOG_FILE"
-    printf 'Started: %s\n' "$(date --iso-8601=seconds)" >> "$LOG_FILE"
-    printf 'Command: %s\n' "$kind" >> "$LOG_FILE"
+    if ! : > "$LOG_FILE" || ! chmod 600 "$LOG_FILE" ||
+       ! printf 'Started: %s\n' "$(date --iso-8601=seconds)" >> "$LOG_FILE" ||
+       ! printf 'Command: %s\n' "$kind" >> "$LOG_FILE"; then
+        printf 'ERROR: Could not create maintenance log: %s\n' "$LOG_FILE" >&2
+        exit 1
+    fi
+}
+
+acquire_maintenance_lock() {
+    local inherited_lock=""
+
+    command -v flock >/dev/null 2>&1 || fatal "Missing required command: flock"
+    if [ "${BABY_STEP_LOCK_HELD:-0}" -eq 1 ] &&
+       [[ "$MAINTENANCE_LOCK_FD" =~ ^[0-9]+$ ]]; then
+        inherited_lock="$(readlink -f "/proc/$$/fd/$MAINTENANCE_LOCK_FD" \
+            2>/dev/null || true)"
+        if [ "$inherited_lock" = "$STATE_DIR/maintenance.lock" ]; then
+            flock -n "$MAINTENANCE_LOCK_FD" ||
+                fatal "Another baby-step maintenance command is already running"
+            return 0
+        fi
+    fi
+    ensure_baby_dirs || fatal "Could not prepare the maintenance state directory"
+    if ! exec {MAINTENANCE_LOCK_FD}> "$STATE_DIR/maintenance.lock"; then
+        fatal "Could not open the maintenance lock"
+    fi
+    chmod 600 "$STATE_DIR/maintenance.lock" || fatal "Could not secure the maintenance lock"
+    if ! flock -n "$MAINTENANCE_LOCK_FD"; then
+        fatal "Another baby-step maintenance command is already running"
+    fi
+    export BABY_STEP_LOCK_HELD=1 MAINTENANCE_LOCK_FD
 }
 
 log_note() {
@@ -106,12 +138,13 @@ detect_flake_target() {
 
     attrs_json="$(nix eval --json "$NIXOS_DIR#nixosConfigurations" \
         --apply builtins.attrNames 2>> "$LOG_FILE")" || return 1
-    count="$(jq 'length' <<< "$attrs_json")"
+    count="$(jq 'length' <<< "$attrs_json")" || return 1
+    [[ "$count" =~ ^[0-9]+$ ]] || return 1
 
+    host_name="$(hostname)"
     if [ "$count" -eq 1 ]; then
         FLAKE_ATTR="$(jq -r '.[0]' <<< "$attrs_json")"
     elif [ "$count" -gt 1 ]; then
-        host_name="$(hostname)"
         while IFS= read -r candidate; do
             candidate_host="$(nix eval --raw \
                 "$NIXOS_DIR#nixosConfigurations.${candidate}.config.networking.hostName" \
@@ -131,6 +164,15 @@ detect_flake_target() {
     case "$FLAKE_ATTR" in
         *[!A-Za-z0-9._+-]*) return 1 ;;
     esac
+
+    candidate_host="$(nix eval --raw \
+        "$NIXOS_DIR#nixosConfigurations.${FLAKE_ATTR}.config.networking.hostName" \
+        2>> "$LOG_FILE")" || return 1
+    if [ "$candidate_host" != "$host_name" ]; then
+        printf 'Configuration %s has hostname %s, but this computer is %s.\n' \
+            "$FLAKE_ATTR" "$candidate_host" "$host_name" >> "$LOG_FILE"
+        return 1
+    fi
 
     FLAKE_TARGET="$NIXOS_DIR#$FLAKE_ATTR"
     printf 'Detected flake target: %s\n' "$FLAKE_TARGET" >> "$LOG_FILE"
@@ -159,10 +201,14 @@ record_success() {
     local path="$STATE_DIR/last-${marker}.txt"
     local temporary
 
-    ensure_baby_dirs
-    temporary="$(mktemp "$STATE_DIR/.last-${marker}.XXXXXX")"
-    printf '%s — %s\n' "$(date --iso-8601=seconds)" "$*" > "$temporary"
-    mv -f "$temporary" "$path"
+    ensure_baby_dirs || fatal "Could not prepare the maintenance state directory"
+    temporary="$(mktemp "$STATE_DIR/.last-${marker}.XXXXXX")" ||
+        fatal "Could not create a temporary state file"
+    if ! printf '%s — %s\n' "$(date --iso-8601=seconds)" "$*" > "$temporary" ||
+       ! mv -f "$temporary" "$path"; then
+        rm -f -- "$temporary"
+        fatal "Could not save maintenance state: $path"
+    fi
 }
 
 write_maintenance_state() {
@@ -174,10 +220,11 @@ write_maintenance_state() {
     local temporary
     local generation
 
-    ensure_baby_dirs
-    generation="$(current_generation)"
+    ensure_baby_dirs || fatal "Could not prepare the maintenance state directory"
+    generation="$(current_generation || true)"
     [ -n "$generation" ] || generation="Unknown"
-    temporary="$(mktemp "$STATE_DIR/.maintenance.XXXXXX")"
+    temporary="$(mktemp "$STATE_DIR/.maintenance.XXXXXX")" ||
+        fatal "Could not create a temporary maintenance record"
 
     {
         printf 'Date: %s\n' "$(date --iso-8601=seconds)"
@@ -191,7 +238,13 @@ write_maintenance_state() {
         printf 'Last successful system build: %s\n' "$(marker_value build)"
         printf 'Last successful system switch: %s\n' "$(marker_value switch)"
         printf 'Last successful Git backup: %s\n' "$(marker_value git-backup)"
-    } > "$temporary"
+    } > "$temporary" || {
+        rm -f -- "$temporary"
+        fatal "Could not write the maintenance record"
+    }
 
-    mv -f "$temporary" "$STATE_DIR/last-maintenance.txt"
+    if ! mv -f "$temporary" "$STATE_DIR/last-maintenance.txt"; then
+        rm -f -- "$temporary"
+        fatal "Could not save the maintenance record"
+    fi
 }

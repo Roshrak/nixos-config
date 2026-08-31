@@ -139,7 +139,7 @@ community_palette = "Oxocarbon"
 custom_palette = "konachan-com-362509-bikini-bow-braids-breasts-bunny-fang-flowers-gray-eyes-headdress-long-hair-navel-red-hair-ribbons-rose-signed-swimsuit-thighhighs-wristwear-vib"
 mode = "dark"
 source = "wallpaper"
-wallpaper_scheme = "m3-fruit-salad"
+wallpaper_scheme = "m3-content"
 
     [theme.templates]
     builtin_ids = [ "btop", "cava", "gtk3", "gtk4", "kitty", "mango", "qt" ]
@@ -149,16 +149,16 @@ wallpaper_scheme = "m3-fruit-salad"
 directory = "/home/aesc/Pictures/Wallpapers"
 
     [wallpaper.default]
-    path = "/home/aesc/Pictures/Wallpapers/wallhaven-5ykdq8.png"
+    path = "/home/aesc/Pictures/Wallpapers/Konachan.com - 362509 bikini bow braids breasts bunny fang flowers gray_eyes headdress long_hair navel red_hair ribbons rose signed swimsuit thighhighs wristwear.jpg"
 
     [wallpaper.last]
-    path = "/home/aesc/Pictures/Wallpapers/wallhaven-5ykdq8.png"
+    path = "/home/aesc/Pictures/Wallpapers/Konachan.com - 362509 bikini bow braids breasts bunny fang flowers gray_eyes headdress long_hair navel red_hair ribbons rose signed swimsuit thighhighs wristwear.jpg"
 
     [wallpaper.monitors.HDMI-A-1]
-    path = "/home/aesc/Pictures/Wallpapers/wallhaven-5ykdq8.png"
+    path = "/home/aesc/Pictures/Wallpapers/Konachan.com - 362509 bikini bow braids breasts bunny fang flowers gray_eyes headdress long_hair navel red_hair ribbons rose signed swimsuit thighhighs wristwear.jpg"
 
     [wallpaper.monitors.eDP-1]
-    path = "/home/aesc/Pictures/Wallpapers/wallhaven-5ykdq8.png"
+    path = "/home/aesc/Pictures/Wallpapers/Konachan.com - 362509 bikini bow braids breasts bunny fang flowers gray_eyes headdress long_hair navel red_hair ribbons rose signed swimsuit thighhighs wristwear.jpg"
 
     [[wallpaper.favorite]]
     palette_source = "wallpaper"

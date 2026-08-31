@@ -8,6 +8,8 @@ set -uo pipefail
 
 U="$(id -u)"
 removed=0
+stale_pids=()
+declare -A stale_start_times=()
 
 # Active user scopes right now (bare unit names).
 active_units="$(systemctl --user list-units --type=scope --state=active --no-legend 2>/dev/null | awk '{print $1}')"
@@ -21,11 +23,23 @@ for pid in $(pgrep -u "$U" -x chromium 2>/dev/null); do
         continue    # owned by a live scope -> legitimate
     fi
 
-    kill -TERM "$pid" 2>/dev/null && removed=$((removed+1))
+    start_time="$(awk '{print $22}' "/proc/$pid/stat" 2>/dev/null || true)"
+    if [ -n "$start_time" ] && kill -TERM "$pid" 2>/dev/null; then
+        stale_pids+=("$pid")
+        stale_start_times["$pid"]="$start_time"
+        removed=$((removed+1))
+    fi
 done
 
 sleep 0.4
-pgrep -u "$U" -x chromium >/dev/null 2>&1 && pkill -KILL -u "$U" -x chromium 2>/dev/null
+for pid in "${stale_pids[@]}"; do
+    current_start="$(awk '{print $22}' "/proc/$pid/stat" 2>/dev/null || true)"
+    if [ -n "${stale_start_times[$pid]}" ] &&
+       [ "$current_start" = "${stale_start_times[$pid]}" ] &&
+       [ -r "/proc/$pid/comm" ] && [ "$(< "/proc/$pid/comm")" = "chromium" ]; then
+        kill -KILL "$pid" 2>/dev/null || true
+    fi
+done
 
 # Drop singleton artifacts pointing at dead pids only.
 lock="$HOME/.config/chromium/SingletonLock"

@@ -28,12 +28,13 @@ if [ "${EUID:-$(id -u)}" -eq 0 ]; then
 fi
 
 start_log "update-and-push"
+acquire_maintenance_lock
 TOTAL=8
 
 printf 'Preparing a safe update and GitHub backup.\n\n'
 
 show_step 1 "$TOTAL" "Checking Git identity, branch, and remote"
-if ! require_commands git nix jq; then
+if ! require_commands git nix jq rg awk; then
     show_failed
     fatal "Git or Nix is missing"
 fi
@@ -53,6 +54,7 @@ fi
 
 branch="$(git -C "$BACKUP_REPO" branch --show-current)"
 remote_url="$(git -C "$BACKUP_REPO" remote get-url origin 2>/dev/null || true)"
+remote_push_url="$(git -C "$BACKUP_REPO" remote get-url --push origin 2>/dev/null || true)"
 if [ "$branch" != "main" ]; then
     show_failed
     fatal "Expected Git branch main, found: ${branch:-detached HEAD}"
@@ -67,6 +69,16 @@ case "$remote_url" in
         fatal "The origin remote is not the expected GitHub backup repository"
         ;;
 esac
+case "$remote_push_url" in
+    https://github.com/Roshrak/nixos-config|https://github.com/Roshrak/nixos-config.git|\
+    git@github.com:Roshrak/nixos-config|git@github.com:Roshrak/nixos-config.git|\
+    https://*@github.com/Roshrak/nixos-config|https://*@github.com/Roshrak/nixos-config.git)
+        ;;
+    *)
+        show_failed
+        fatal "The origin push destination is not the expected GitHub backup repository"
+        ;;
+esac
 show_ok
 
 show_step 2 "$TOTAL" "Checking the NixOS flake and backup sources"
@@ -79,28 +91,51 @@ else
     fatal "NixOS or configuration backup safety checks failed"
 fi
 
-if [ "$check_only" -eq 1 ]; then
-    printf '\nSUCCESS: Update-and-push safety checks passed.\n'
-    printf 'Nothing was updated, committed, or pushed.\n'
-    printf 'Detailed log: %s\n' "$LOG_FILE"
-    exit 0
-fi
-
 show_step 3 "$TOTAL" "Checking for remote Git changes"
 if run_logged "Git fetch" git -C "$BACKUP_REPO" fetch --quiet origin main; then
-    ahead_behind="$(git -C "$BACKUP_REPO" rev-list --left-right --count \
-        HEAD...origin/main 2>> "$LOG_FILE")"
-    local_ahead="$(awk '{ print $1 }' <<< "$ahead_behind")"
-    remote_ahead="$(awk '{ print $2 }' <<< "$ahead_behind")"
+    if ! ahead_behind="$(git -C "$BACKUP_REPO" rev-list --left-right --count \
+            HEAD...origin/main 2>> "$LOG_FILE")"; then
+        show_failed
+        fatal "Could not compare local and GitHub commits; system update was not started"
+    fi
+    read -r local_ahead remote_ahead <<< "$ahead_behind"
+    if ! [[ "$local_ahead" =~ ^[0-9]+$ && "$remote_ahead" =~ ^[0-9]+$ ]]; then
+        show_failed
+        fatal "Git returned an invalid local/remote comparison"
+    fi
     if [ "$remote_ahead" -ne 0 ]; then
         show_failed
         fatal "GitHub has newer commits. Stop and ask for help before updating."
+    fi
+    if [ "$local_ahead" -ne 0 ]; then
+        show_failed
+        fatal "Local unpushed commits need review before this tool can continue."
     fi
     printf 'Local commits ahead of origin: %s\n' "$local_ahead" >> "$LOG_FILE"
     show_ok
 else
     show_failed
     fatal "Could not contact the GitHub repository; system update was not started"
+fi
+
+for required_path in nixos baby-step dotfiles scripts; do
+    [ -d "$BACKUP_REPO/$required_path" ] ||
+        fatal "Required repository path is missing: $required_path"
+done
+if ! git -C "$BACKUP_REPO" add --dry-run -A -- \
+    nixos baby-step dotfiles scripts >> "$LOG_FILE" 2>&1; then
+    fatal "Repository staging paths could not be validated"
+fi
+
+if [ "$check_only" -eq 1 ]; then
+    if ! "$SCRIPT_DIR/update-system.sh" --check-only >> "$LOG_FILE" 2>&1; then
+        fatal "System update safety checks failed"
+    fi
+    printf '\nSUCCESS: Update-and-push safety checks passed.\n'
+    printf 'No system configuration or packages were changed. Nothing was committed or pushed.\n'
+    printf 'Only maintenance log and state files were updated.\n'
+    printf 'Detailed log: %s\n' "$LOG_FILE"
+    exit 0
 fi
 
 show_step 4 "$TOTAL" "Updating and verifying the computer"
@@ -121,30 +156,30 @@ fi
 
 show_step 6 "$TOTAL" "Staging and inspecting safe repository paths"
 if ! git -C "$BACKUP_REPO" add -A -- \
-    nixos baby-step dotfiles/.config dotfiles/.local/bin \
-    dotfiles/.local/share/applications dotfiles/.local/share/desktop-look-toggle \
-    configuration.nix flake.nix flake.lock claude-code.nix \
-    apps-and-lotus.nix comic-mono.nix wave75-via.nix windows-vm.nix \
-    scripts >> "$LOG_FILE" 2>&1; then
+    nixos baby-step dotfiles scripts >> "$LOG_FILE" 2>&1; then
     show_failed
     fatal "Could not stage the configuration snapshot"
 fi
 
 unexpected_path=0
+if ! staged_paths="$(git -C "$BACKUP_REPO" diff --cached --name-only \
+        2>> "$LOG_FILE")"; then
+    show_failed
+    fatal "Could not inspect staged paths. Nothing was committed or pushed."
+fi
 while IFS= read -r staged_path; do
+    [ -n "$staged_path" ] || continue
     case "$staged_path" in
         nixos/*|baby-step/*|dotfiles/.config/*|dotfiles/.local/bin/*|\
         dotfiles/.local/share/applications/*|dotfiles/.local/share/desktop-look-toggle/*|\
-        scripts/*|\
-        configuration.nix|flake.nix|flake.lock|claude-code.nix|\
-        apps-and-lotus.nix|comic-mono.nix|wave75-via.nix|windows-vm.nix)
+        scripts/*)
             ;;
         *)
             printf 'Unexpected staged path: %s\n' "$staged_path" >> "$LOG_FILE"
             unexpected_path=1
             ;;
     esac
-done < <(git -C "$BACKUP_REPO" diff --cached --name-only)
+done <<< "$staged_paths"
 if [ "$unexpected_path" -ne 0 ]; then
     show_failed
     fatal "An unexpected file is staged. Nothing was committed or pushed."
@@ -157,23 +192,36 @@ fi
 
 secret_name=0
 while IFS= read -r staged_path; do
+    [ -n "$staged_path" ] || continue
     case "$staged_path" in
         */id_rsa|*/id_ed25519|*/credentials|*/credentials.*|*/.env|*/.env.*|\
-        *.key|*.p12|*.pfx)
+        */id_ecdsa|*/.netrc|*/auth.json|*.key|*.pem|*.p12|*.pfx)
             secret_name=1
             ;;
     esac
-done < <(git -C "$BACKUP_REPO" diff --cached --name-only)
+done <<< "$staged_paths"
 if [ "$secret_name" -ne 0 ]; then
     show_failed
     fatal "A secret-like filename is staged. Its contents were not displayed."
 fi
 
-if git -C "$BACKUP_REPO" diff --cached -U0 --no-ext-diff | rg -qi \
-   "^\\+[^+].*(access[_-]?token[[:space:]]*=|refresh[_-]?token[[:space:]]*=|api[_-]?key[[:space:]]*=|client[_-]?secret[[:space:]]*=|BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|password[[:space:]]*=[[:space:]]*[\\\"'][^\\\"']{4,})"; then
+git -C "$BACKUP_REPO" diff --cached -U0 --no-ext-diff | rg -i \
+   "^\\+[^+].*(access[_-]?token[[:space:]]*=|refresh[_-]?token[[:space:]]*=|api[_-]?key[[:space:]]*=|client[_-]?secret[[:space:]]*=|BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|password[[:space:]]*=[[:space:]]*[\\\"'][^\\\"']{4,})" \
+   >/dev/null
+scan_status=("${PIPESTATUS[@]}")
+if [ "${scan_status[0]}" -ne 0 ] || [ "${scan_status[1]}" -gt 1 ]; then
+    show_failed
+    fatal "The staged-secret scan could not run reliably. Nothing was committed or pushed."
+fi
+if [ "${scan_status[1]}" -eq 0 ]; then
     show_failed
     fatal "Possible secret content is staged. Its value was not displayed."
 fi
+
+staged_tree="$(git -C "$BACKUP_REPO" write-tree 2>> "$LOG_FILE")" || {
+    show_failed
+    fatal "Could not record the reviewed staged snapshot"
+}
 
 show_ok
 printf '\nFiles ready for backup:\n'
@@ -191,6 +239,12 @@ if [ "$confirmation" != "PUSH" ]; then
 fi
 
 show_step 7 "$TOTAL" "Committing the reviewed configuration"
+current_tree="$(git -C "$BACKUP_REPO" write-tree 2>> "$LOG_FILE")" ||
+    fatal "Could not recheck the staged snapshot"
+if [ "$current_tree" != "$staged_tree" ]; then
+    show_failed
+    fatal "The staged files changed after review. Nothing was committed or pushed."
+fi
 if git -C "$BACKUP_REPO" diff --cached --quiet; then
     printf 'NO CHANGES\n'
 else

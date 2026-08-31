@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -uo pipefail
+set -euo pipefail
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 # shellcheck source=lib/common.sh
@@ -23,23 +23,65 @@ case "${1:-}" in
 esac
 
 start_log "backup"
+acquire_maintenance_lock
 TOTAL=6
 SNAPSHOT_WORK=""
+REPLACEMENTS_COMPLETE=0
+rollback_root=""
+replaced_destinations=()
+replacement_had_original=()
 
 cleanup() {
+    local status=$?
+    trap - EXIT INT TERM HUP
+    set +e
+    if [ "$status" -ne 0 ] && [ "$REPLACEMENTS_COMPLETE" -eq 0 ] &&
+       [ "${#replaced_destinations[@]}" -gt 0 ]; then
+        rollback_replacements ||
+            printf 'WARNING: Automatic repository rollback was incomplete.\n' >> "$LOG_FILE"
+    fi
     if [ -n "$SNAPSHOT_WORK" ]; then
         case "$SNAPSHOT_WORK" in
             "$STATE_DIR"/snapshot.*) rm -rf -- "$SNAPSHOT_WORK" ;;
         esac
     fi
+    exit "$status"
 }
 trap cleanup EXIT
+trap 'printf "Interrupted before completion.\n" >> "$LOG_FILE"; exit 130' INT TERM HUP
+
+rollback_replacements() {
+    local index
+    local destination
+    local relative
+    local rollback
+    local failed=0
+
+    for ((index=${#replaced_destinations[@]} - 1; index >= 0; index--)); do
+        destination="${replaced_destinations[$index]}"
+        case "$destination" in
+            "$BACKUP_REPO"/*) ;;
+            *) failed=1; continue ;;
+        esac
+        relative="${destination#"$BACKUP_REPO"/}"
+        rollback="$rollback_root/$relative"
+        if [ "${replacement_had_original[$index]}" -eq 1 ] && [ -e "$rollback" ]; then
+            rm -rf -- "$destination" || failed=1
+            mkdir -p "$(dirname -- "$destination")" || failed=1
+            mv "$rollback" "$destination" || failed=1
+        elif [ "${replacement_had_original[$index]}" -eq 0 ]; then
+            rm -rf -- "$destination" || failed=1
+        fi
+    done
+    return "$failed"
+}
 
 replace_tree() {
     local prepared="$1"
     local destination="$2"
     local relative
     local rollback
+    local had_original=0
 
     case "$destination" in
         "$BACKUP_REPO"/*) ;;
@@ -52,14 +94,15 @@ replace_tree() {
     mkdir -p "$(dirname -- "$destination")" "$(dirname -- "$rollback")"
 
     if [ -e "$destination" ]; then
+        had_original=1
+    fi
+    replaced_destinations+=("$destination")
+    replacement_had_original+=("$had_original")
+    if [ "$had_original" -eq 1 ]; then
         mv "$destination" "$rollback" || return 1
     fi
     if mv "$prepared" "$destination"; then
         return 0
-    fi
-
-    if [ -e "$rollback" ] && [ ! -e "$destination" ]; then
-        mv "$rollback" "$destination" || true
     fi
     return 1
 }
@@ -67,7 +110,7 @@ replace_tree() {
 printf 'Preparing a focused configuration backup.\n\n'
 
 show_step 1 "$TOTAL" "Checking sources and Git repository"
-if require_commands cp find git mktemp mv nix jq &&
+if require_commands cp find git mktemp mv nix jq timeout mango niri noctalia &&
    [ -d "$BACKUP_REPO/.git" ] &&
    detect_flake_target; then
     show_ok
@@ -131,9 +174,6 @@ fi
 
 show_step 4 "$TOTAL" "Preparing selected user configuration"
 mkdir -p "$SNAPSHOT_WORK/dotconfig"
-if [ -d "$BACKUP_REPO/dotfiles/.config" ]; then
-    cp -a "$BACKUP_REPO/dotfiles/.config/." "$SNAPSHOT_WORK/dotconfig/"
-fi
 for config_name in \
     mango noctalia kitty fcitx5 nvim fastfetch niri theme-profiles \
     plasma-workspace systemd; do
@@ -145,7 +185,7 @@ for config_name in \
         \( -name '*.bak' -o -name '*.bak-*' -o -name '*.before-*' \
            -o -name '*.backup' -o -name '*.old' \) -delete
 done
-for config_file in mimeapps.list kwinrc; do
+for config_file in mimeapps.list kwinrc user-dirs.dirs; do
     if [ -f "$HOME/.config/$config_file" ]; then
         cp -a "$HOME/.config/$config_file" "$SNAPSHOT_WORK/dotconfig/$config_file"
     fi
@@ -154,9 +194,6 @@ show_ok
 
 show_step 5 "$TOTAL" "Preparing helpers and baby-step tools"
 mkdir -p "$SNAPSHOT_WORK/local-bin"
-if [ -d "$BACKUP_REPO/dotfiles/.local/bin" ]; then
-    cp -a "$BACKUP_REPO/dotfiles/.local/bin/." "$SNAPSHOT_WORK/local-bin/"
-fi
 for helper_name in \
     apply-theme-profile clean-stray-sessions niri-session-guarded \
     mango-session-guarded save-noctalia-profile noctalia-greeter-sync-smart \
@@ -195,9 +232,10 @@ if ! replace_tree "$SNAPSHOT_WORK/baby-step" "$BACKUP_REPO/baby-step"; then
     show_failed
     fatal "Could not replace the repository baby-step snapshot"
 fi
+REPLACEMENTS_COMPLETE=1
 
 show_ok
-record_success git-backup "Snapshot prepared in $BACKUP_REPO (not committed or pushed)"
+record_success snapshot "Snapshot prepared in $BACKUP_REPO (not committed or pushed)"
 write_maintenance_state "Configuration snapshot" "Snapshot copied; not committed or pushed" \
     "Source validation and recoverable snapshot replacement" \
     "$BACKUP_REPO and local hardware backup" \
