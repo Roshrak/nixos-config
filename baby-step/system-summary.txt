@@ -124,6 +124,21 @@ Maintenance record:
 Safety backups:
 /home/aesc/baby-step/backups
 
+MOVE OR INSTALL THIS SYSTEM ON ANOTHER COMPUTER
+
+Complete beginner guide:
+~/nixos-config/docs/MIGRATION-INSTALL.md
+
+Safe setup script:
+~/nixos-config/scripts/bootstrap-nixos.sh
+
+The repository uses separate host profiles under:
+~/nixos-config/nixos/hosts
+
+The current profile is named tonelico, but its hostname is tonelico-nix.
+Every machine keeps its own generated hardware-configuration.nix.
+Do not copy Tonelico's hardware file onto unrelated hardware.
+
 IF AN UPDATE FAILS
 
 Do not run random commands.

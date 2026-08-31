@@ -64,21 +64,25 @@ update. Verify current state before making important changes.
 
 Primary directory: `/etc/nixos`
 
-Active module graph from `/etc/nixos/flake.nix`:
+Canonical Git source: `/home/aesc/nixos-config/nixos`
 
-1. `hardware-configuration.nix`
-2. Mango flake module
-3. `comic-mono.nix`
-4. `wave75-via.nix`
-5. Noctalia module
-6. Noctalia greeter module
-7. Fcitx5 Lotus module
-8. `apps-and-lotus.nix`
-9. `claude-code.nix`
-10. `windows-vm.nix`
-11. `desktop/plasma.nix`
-12. `desktop/niri.nix`
-13. `configuration.nix`
+The flake automatically discovers complete directories under `hosts/`. The
+active profile is `hosts/tonelico/`, which contains:
+
+1. `host.nix`: flake/hostname/platform/deployment metadata.
+2. `hardware-configuration.nix`: the generated Tonelico filesystem and hardware
+   module.
+3. `default.nix`: Intel Core Ultra graphics, microcode, VA-API, modesetting, and
+   `thermald` settings specific to this Acer laptop.
+
+The shared module graph then includes Mango, Comic Mono, Noctalia, Noctalia
+Greeter, Fcitx5 Lotus, applications, Claude Code, Plasma, Niri, and
+`configuration.nix`. Tonelico opts into `wave75-via.nix` and `windows-vm.nix`
+through `host.nix`; new machines do not receive those optional modules unless
+their own host metadata requests them.
+
+The conventional `/etc/nixos/hardware-configuration.nix` is retained for
+generation and recovery, but the active flake imports the host-scoped copy.
 
 Main inputs include NixOS 26.05, Mango, Noctalia, Noctalia Greeter, Niri,
 Fcitx5 Lotus, and Claude Code.
@@ -227,6 +231,20 @@ Canonical directory: `/home/aesc/baby-step`
 ~/baby-step/backup-config.sh
 ```
 
+Multi-machine deployment and installation:
+
+```text
+Guide:  /home/aesc/nixos-config/docs/MIGRATION-INSTALL.md
+Script: /home/aesc/nixos-config/scripts/bootstrap-nixos.sh
+```
+
+The bootstrap script detects or creates host profiles, imports freshly generated
+hardware configuration, validates a complete temporary candidate, backs up
+existing system and selected user configuration, deploys required files, and can
+optionally build, switch, or run `nixos-install`. It was tested for current-host
+detection, new-host creation, repeated idempotent deployment, selected user-file
+placement, automatic host discovery, and a complete Tonelico system build.
+
 The scripts dynamically detect the flake attribute, use timestamped logs, check
 disk space and required commands, evaluate before building, build before
 switching, stop on failure, and verify services afterward. The Git workflow
@@ -242,19 +260,25 @@ Safety backups: `/home/aesc/baby-step/backups`
 - Recoverable Git repository: `/home/aesc/nixos-config`.
 - GitHub repository: `https://github.com/Roshrak/nixos-config.git`.
 - Branch: `main`.
-- Last verified GitHub commit: `da6a7f353387d8ece4916ea6d8b31f1521826a1c`.
-- The repository stores focused NixOS files, selected user configuration,
-  selected helper scripts, and the baby-step toolkit. It does not intentionally
-  store logs, runtime state, private hardware configuration, or large personal
-  data.
+- Run `git -C /home/aesc/nixos-config log -1 --oneline` for the current verified
+  commit; the maintenance state records the last confirmed remote hash.
+- The repository stores the canonical multi-host NixOS source, per-host generated
+  hardware modules, selected user configuration, selected helpers, documentation,
+  deployment scripts, and the baby-step toolkit. It does not intentionally store
+  logs, runtime state, secrets, or large personal data.
+- Generated hardware files contain filesystem UUIDs needed for reinstall; those
+  identifiers are not authentication secrets. Never add passwords, encryption
+  recovery material, tokens, or private keys.
 - `/etc/nixos` also has a local Git recovery repository on branch `master`.
-- Both repositories were clean when this document was generated.
+- Both repositories should be kept clean after verified Git snapshots; check with
+  `git status --short --branch` rather than assuming.
 - Repo-local Git identity is configured as `Roshrak` with a GitHub noreply
   address. Do not invent or replace the user's email.
 
 Existing backups include:
 
 - `/home/aesc/baby-step/backups/2026-08-31-pre-maintenance`
+- `/home/aesc/baby-step/backups/etc-nixos-before-multihost-20260831-1022`
 - timestamped `repository-before-*` snapshots under the backup directory
 - `/etc/nixos/configuration.nix.backup.20260830-224757`
 - `/etc/nixos/configuration.nix.backup.20260830-224805`

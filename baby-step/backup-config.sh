@@ -98,37 +98,31 @@ rollback_root="$BACKUP_DIR/repository-before-$stamp"
 SNAPSHOT_WORK="$(mktemp -d "$STATE_DIR/snapshot.XXXXXX")"
 mkdir -p "$rollback_root" "$SNAPSHOT_WORK/nixos"
 
-# Historical backup directories are inactive, but preserve existing copies.
-if [ -d "$BACKUP_REPO/nixos" ]; then
-    while IFS= read -r -d '' historical_dir; do
-        cp -a "$historical_dir" "$SNAPSHOT_WORK/nixos/"
-    done < <(find "$BACKUP_REPO/nixos" -mindepth 1 -maxdepth 1 \
-        -type d -name 'backup-*' -print0)
-    if [ -d "$BACKUP_REPO/nixos/fonts" ]; then
-        cp -a "$BACKUP_REPO/nixos/fonts" "$SNAPSHOT_WORK/nixos/"
-    fi
-fi
-
 show_step 3 "$TOTAL" "Preparing the NixOS configuration snapshot"
 while IFS= read -r -d '' source_path; do
     relative="${source_path#"$NIXOS_DIR"/}"
     case "$relative" in
-        .git/*|backup-*/*|*.bak|*.bak-*|*.before-*|*.backup.*) continue ;;
+        .git/*|backup-*/*|result|result-*|*.bak|*.bak-*|*.before-*|*.backup.*)
+            continue
+            ;;
         hardware-configuration.nix)
             cp -a "$source_path" "$BACKUP_DIR/hardware-configuration-$stamp.nix"
             continue
             ;;
+        *.nix|flake.lock|.gitignore|*.md|fonts/*.ttf|fonts/*/*.ttf) ;;
+        *) continue ;;
     esac
     mkdir -p "$SNAPSHOT_WORK/nixos/$(dirname -- "$relative")"
     cp -a --no-preserve=ownership "$source_path" "$SNAPSHOT_WORK/nixos/$relative"
 done < <(
-    find "$NIXOS_DIR" -maxdepth 2 -type f \
-        \( -name '*.nix' -o -name 'flake.lock' \) -print0
+    find "$NIXOS_DIR" -maxdepth 4 -type f -print0
 )
 
 if [ -f "$SNAPSHOT_WORK/nixos/flake.nix" ] &&
    [ -f "$SNAPSHOT_WORK/nixos/configuration.nix" ] &&
-   [ -f "$SNAPSHOT_WORK/nixos/flake.lock" ]; then
+   [ -f "$SNAPSHOT_WORK/nixos/flake.lock" ] &&
+   [ -f "$SNAPSHOT_WORK/nixos/hosts/$FLAKE_ATTR/host.nix" ] &&
+   [ -f "$SNAPSHOT_WORK/nixos/hosts/$FLAKE_ATTR/hardware-configuration.nix" ]; then
     show_ok
 else
     show_failed
@@ -201,13 +195,6 @@ if ! replace_tree "$SNAPSHOT_WORK/baby-step" "$BACKUP_REPO/baby-step"; then
     show_failed
     fatal "Could not replace the repository baby-step snapshot"
 fi
-
-while IFS= read -r -d '' source_path; do
-    base_name="$(basename -- "$source_path")"
-    [ "$base_name" = "hardware-configuration.nix" ] && continue
-    cp -a --no-preserve=ownership "$source_path" "$BACKUP_REPO/$base_name"
-done < <(find "$BACKUP_REPO/nixos" -maxdepth 1 -type f \
-    \( -name '*.nix' -o -name 'flake.lock' \) -print0)
 
 show_ok
 record_success git-backup "Snapshot prepared in $BACKUP_REPO (not committed or pushed)"

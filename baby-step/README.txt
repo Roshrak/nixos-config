@@ -18,6 +18,13 @@ DETAILED SUMMARY FOR AN AI
 Give the AI this file:
 ~/baby-step/system-summary-for-ai.md
 
+INSTALL OR MOVE TO ANOTHER COMPUTER
+Read this guide first:
+~/nixos-config/docs/MIGRATION-INSTALL.md
+
+Safe deployment script:
+~/nixos-config/scripts/bootstrap-nixos.sh
+
 IF SOMETHING FAILS
 Do not run random commands.
 Copy the ERROR message and show it to Codex or ChatGPT.

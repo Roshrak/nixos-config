@@ -28,7 +28,6 @@
   boot.loader.efi.canTouchEfiVariables = true;
   boot.kernelPackages = pkgs.linuxPackages_latest;
 
-  networking.hostName = "tonelico-nix";
   networking.networkmanager.enable = true;
   networking.firewall.enable = true;
 
@@ -79,21 +78,14 @@ programs.noctalia-greeter = {
     systemd.enable = false; # Started once by Mango instead.
   };
 
-  # Intel Core Ultra / modern Intel graphics, media acceleration and firmware.
+  # Portable graphics and firmware defaults. CPU/GPU vendor-specific settings
+  # live under hosts/<flake-attribute>/default.nix.
   hardware.enableRedistributableFirmware = true;
-  hardware.cpu.intel.updateMicrocode = true;
   hardware.graphics = {
     enable = true;
     enable32Bit = true;
-    extraPackages = with pkgs; [
-      intel-media-driver
-      vpl-gpu-rt
-      intel-compute-runtime
-    ];
   };
-  services.xserver.videoDrivers = [ "modesetting" ];
   environment.sessionVariables = {
-    LIBVA_DRIVER_NAME = "iHD";
     NIXOS_OZONE_WL = "1";
     MOZ_ENABLE_WAYLAND = "1";
     TERMINAL = "kitty";
@@ -104,7 +96,6 @@ programs.noctalia-greeter = {
     enable = true;
     memoryPercent = 50;
   };
-  services.thermald.enable = true;
   services.fwupd.enable = true;
   services.fstrim.enable = true;
   hardware.bluetooth = {

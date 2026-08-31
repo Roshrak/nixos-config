@@ -14,27 +14,55 @@
     claude-code-nix.url = "github:sadjow/claude-code-nix";
   };
 
-  outputs = inputs@{ nixpkgs, mango, noctalia, ... }: {
-    nixosConfigurations.tonelico = nixpkgs.lib.nixosSystem {
-      system = "x86_64-linux";
-      specialArgs = { inherit inputs; };
-      modules = [
-        ./hardware-configuration.nix
-        mango.nixosModules.mango
-        ./comic-mono.nix
-        ./wave75-via.nix
-        noctalia.nixosModules.default
-        inputs.noctalia-greeter.nixosModules.default
-        inputs.lotus.nixosModules.fcitx5-lotus
-        ./apps-and-lotus.nix
-        ./claude-code.nix
-        ./windows-vm.nix
-        ./desktop/plasma.nix      # KDE Plasma 6 second session
-        ./desktop/niri.nix        # Niri third session (Phase 5)
-        ./configuration.nix
-      ];
+  outputs = inputs@{ nixpkgs, mango, noctalia, ... }:
+    let
+      lib = nixpkgs.lib;
+      hostRoot = ./hosts;
+      hostEntries = builtins.readDir hostRoot;
+
+      # A host becomes a flake configuration when its directory contains both
+      # host.nix (small metadata) and hardware-configuration.nix (generated on
+      # that physical machine). Templates and documentation are ignored.
+      hostKeys = builtins.attrNames (lib.filterAttrs
+        (name: type:
+          type == "directory"
+          && builtins.pathExists (hostRoot + "/${name}/host.nix")
+          && builtins.pathExists
+            (hostRoot + "/${name}/hardware-configuration.nix"))
+        hostEntries);
+
+      mkHost = hostKey:
+        let
+          hostPath = hostRoot + "/${hostKey}";
+          host = import (hostPath + "/host.nix");
+          hostModule = hostPath + "/default.nix";
+          extraModules = host.extraModules or [ ];
+        in
+        lib.nameValuePair hostKey (lib.nixosSystem {
+          system = host.system;
+          specialArgs = { inherit inputs host; };
+          modules = [
+            (hostPath + "/hardware-configuration.nix")
+            hostModule
+            mango.nixosModules.mango
+            ./comic-mono.nix
+            noctalia.nixosModules.default
+            inputs.noctalia-greeter.nixosModules.default
+            inputs.lotus.nixosModules.fcitx5-lotus
+            ./apps-and-lotus.nix
+            ./claude-code.nix
+            ./desktop/plasma.nix      # KDE Plasma 6 second session
+            ./desktop/niri.nix        # Niri third session
+            ./configuration.nix
+            ({ ... }: {
+              networking.hostName = host.hostName;
+            })
+          ] ++ extraModules;
+        });
+    in
+    {
+      nixosConfigurations = builtins.listToAttrs (map mkHost hostKeys);
     };
-  };
 
   nixConfig = {
     extra-substituters = [ "https://noctalia.cachix.org" ];
