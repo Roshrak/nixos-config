@@ -1,6 +1,6 @@
 # Tonelico NixOS System Context for AI Assistance
 
-Generated: 2026-08-31T01:34:24+07:00
+Refreshed: 2026-08-31T15:32:38+07:00
 Owner/user: `aesc` (UID 1000)
 Purpose: Paste this file into an AI conversation when troubleshooting this computer.
 
@@ -32,14 +32,14 @@ update. Verify current state before making important changes.
 | Hostname | `tonelico-nix` |
 | NixOS flake attribute | `tonelico` |
 | Correct rebuild target | `/etc/nixos#tonelico` |
-| OS | NixOS 26.05 (Yarara) |
+| OS | NixOS 26.05.20260829.c5c4a43 (Yarara) |
 | Architecture | `x86_64-linux` |
-| Kernel | Linux 7.2.1 (`linuxPackages_latest`) |
+| Kernel | Linux 7.2.2 (`linuxPackages_latest`) |
 | Nix | 2.34.8, flakes and `nix-command` enabled |
 | Time zone | `Asia/Ho_Chi_Minh` |
 | Locale | `en_US.UTF-8` |
-| Current generation | 57, activated 2026-08-31 01:04:02 +07:00 |
-| Current system path | `/nix/store/11z1lwpl69riaxd7aw8314h4yq66xm71-nixos-system-tonelico-nix-26.05.20260827.d57af92` |
+| Current generation | 58 |
+| Current system path | `/nix/store/zhhyi7y08llk57xzw794rd3lg445bg1h-nixos-system-tonelico-nix-26.05.20260829.c5c4a43` |
 
 ## Hardware and storage
 
@@ -49,8 +49,8 @@ update. Verify current state before making important changes.
 - Wi-Fi: Intel Meteor Lake PCH CNVi, PCI ID `8086:7e40`.
 - Audio: Intel Meteor Lake-P HD Audio, PCI ID `8086:7e28`.
 - Memory: 15 GiB RAM; zram swap is enabled at 50% of RAM.
-- Root filesystem: `/dev/nvme0n1p2`, ext4, 468 GiB total, about 343 GiB
-  available at generation time.
+- Root filesystem: `/dev/nvme0n1p2`, ext4, 468 GiB total, about 341 GiB
+  available when this summary was refreshed.
 - EFI system partition: `/dev/nvme0n1p1`, vfat, mounted at `/boot`, about 1 GiB.
 - The EFI partition is shared with Arch. Do not reformat or casually replace it.
 - Boot loader: systemd-boot, EFI variable access enabled, editor disabled,
@@ -163,7 +163,7 @@ Last verified on 2026-08-31:
 - PipeWire and WirePlumber user services: active.
 - Default output: Intel Meteor Lake-P speaker.
 - Default input: Intel Meteor Lake-P digital microphone.
-- Final baby-step health check: 14/14 checks passed.
+- Final baby-step health check: 14/14 checks passed on 2026-08-31 at 15:25 +07:00.
 
 ## Important applications and command versions
 
@@ -330,14 +330,16 @@ from the systemd-boot menu. Do not delete old generations while troubleshooting.
 Last successful rebuild log:
 `/home/aesc/baby-step/logs/rebuild-2026-08-31-011844.log`
 
-Last full health log at generation time:
-`/home/aesc/baby-step/logs/check-2026-08-31-012657.log`
+Last full health log:
+`/home/aesc/baby-step/logs/check-2026-08-31-152509.log`
 
 ## Trash and free-space state
 
-- The standard user Trash was emptied with KDE's `ktrash6 --empty`.
+- The standard user Trash was emptied directly after the desktop Trash API was
+  unavailable in the maintenance terminal; 10 items using about 11 MiB were
+  permanently removed.
 - Verified items remaining: 0.
 - The Trash directory itself uses about 24 KiB for required folder metadata.
 - No root, filesystem-level, or `/boot` Trash directory was found.
-- Root filesystem space after the check: about 343 GiB available (23% used).
+- Root filesystem space after the check: about 341 GiB available (24% used).
 - No caches, Downloads, backups, personal files, or Nix store paths were deleted.
