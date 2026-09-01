@@ -32,6 +32,19 @@ environment {
 
 
 // ============================================================
+// CURSOR
+// ============================================================
+
+// Same cursor as the Mango session and the Noctalia greeter.
+// Niri reads its cursor from this block, NOT from the global
+// XCURSOR_THEME variable, so it must be set explicitly here.
+cursor {
+    xcursor-theme "Bibata-Modern-Ice"
+    xcursor-size 24
+}
+
+
+// ============================================================
 // STARTUP
 // ============================================================
 
@@ -125,7 +138,14 @@ gestures {
 // ============================================================
 
 overview {
-    backdrop-color "#000000"
+    // Keep the desktop wallpaper visible behind the workspace overview.
+    backdrop-color "transparent"
+}
+
+// Move Noctalia's wallpaper surface into the overview backdrop.
+layer-rule {
+    match namespace="^noctalia-wallpaper$"
+    place-within-backdrop true
 }
 
 
@@ -136,6 +156,9 @@ overview {
 layout {
     // Small DWM-like gaps.
     gaps 2
+
+    // Let the wallpaper show through the workspace background.
+    background-color "transparent"
 
     // Do not automatically center the focused column.
     center-focused-column "never"

@@ -134,12 +134,12 @@ password_style = "random"
     transparency_mode = "glass"
 
 [theme]
-builtin = "Ayu"
-community_palette = "Oxocarbon"
+builtin = "Gruvbox"
+community_palette = "ADW"
 custom_palette = "konachan-com-362509-bikini-bow-braids-breasts-bunny-fang-flowers-gray-eyes-headdress-long-hair-navel-red-hair-ribbons-rose-signed-swimsuit-thighhighs-wristwear-vib"
 mode = "dark"
-source = "wallpaper"
-wallpaper_scheme = "m3-content"
+source = "builtin"
+wallpaper_scheme = "m3-fruit-salad"
 
     [theme.templates]
     builtin_ids = [ "btop", "cava", "gtk3", "gtk4", "kitty", "mango", "qt" ]
@@ -149,22 +149,16 @@ wallpaper_scheme = "m3-content"
 directory = "/home/aesc/Pictures/Wallpapers"
 
     [wallpaper.default]
-    path = "/home/aesc/Pictures/Wallpapers/Konachan.com - 362509 bikini bow braids breasts bunny fang flowers gray_eyes headdress long_hair navel red_hair ribbons rose signed swimsuit thighhighs wristwear.jpg"
+    path = "/home/aesc/Pictures/Wallpapers/wallpaperflare.com_wallpaper.jpg"
 
     [wallpaper.last]
-    path = "/home/aesc/Pictures/Wallpapers/Konachan.com - 362509 bikini bow braids breasts bunny fang flowers gray_eyes headdress long_hair navel red_hair ribbons rose signed swimsuit thighhighs wristwear.jpg"
+    path = "/home/aesc/Pictures/Wallpapers/wallpaperflare.com_wallpaper.jpg"
 
     [wallpaper.monitors.HDMI-A-1]
-    path = "/home/aesc/Pictures/Wallpapers/Konachan.com - 362509 bikini bow braids breasts bunny fang flowers gray_eyes headdress long_hair navel red_hair ribbons rose signed swimsuit thighhighs wristwear.jpg"
+    path = "/home/aesc/Pictures/Wallpapers/hatsune-miku-mclaren-gtr-and-the-fashionable-driver-27-1920x1200.jpg"
 
     [wallpaper.monitors.eDP-1]
-    path = "/home/aesc/Pictures/Wallpapers/Konachan.com - 362509 bikini bow braids breasts bunny fang flowers gray_eyes headdress long_hair navel red_hair ribbons rose signed swimsuit thighhighs wristwear.jpg"
-
-    [[wallpaper.favorite]]
-    palette_source = "wallpaper"
-    path = "/home/aesc/Pictures/Wallpapers/wallhaven-5ykdq8.png"
-    theme_mode = "dark"
-    wallpaper_scheme = "m3-fruit-salad"
+    path = "/home/aesc/Pictures/Wallpapers/wallpaperflare.com_wallpaper.jpg"
 
     [[wallpaper.favorite]]
     palette_source = "wallpaper"
@@ -195,6 +189,96 @@ directory = "/home/aesc/Pictures/Wallpapers"
     path = "/home/aesc/Pictures/Wallpapers/120523661_p0.jpg"
     theme_mode = "dark"
     wallpaper_scheme = "m3-fruit-salad"
+
+    [[wallpaper.favorite]]
+    palette_source = "wallpaper"
+    path = "/home/aesc/Pictures/Wallpapers/hatsune-miku-mclaren-gtr-and-the-fashionable-driver-27-1920x1200.jpg"
+    theme_mode = "dark"
+    wallpaper_scheme = "m3-fruit-salad"
+
+    [[wallpaper.favorite]]
+    palette_source = "wallpaper"
+    path = "/home/aesc/Pictures/Wallpapers/Konachan.com - 402579 animal ass blue_eyes blush breasts cat elbow_gloves gloves gray_hair honkai__star_rail honkai_(series) short_hair sushispin undressing watermark.jpg"
+    theme_mode = "dark"
+    wallpaper_scheme = "m3-fruit-salad"
+
+    [[wallpaper.favorite]]
+    palette_source = "wallpaper"
+    path = "/home/aesc/Pictures/Wallpapers/Konachan.com - 362509 bikini bow braids breasts bunny fang flowers gray_eyes headdress long_hair navel red_hair ribbons rose signed swimsuit thighhighs wristwear.jpg"
+    theme_mode = "dark"
+    wallpaper_scheme = "m3-fruit-salad"
+
+    [[wallpaper.favorite]]
+    palette_source = "wallpaper"
+    path = "/home/aesc/Pictures/Wallpapers/wallhaven-qrjxdq.jpg"
+    theme_mode = "dark"
+    wallpaper_scheme = "m3-fruit-salad"
+
+    [[wallpaper.favorite]]
+    palette_source = "wallpaper"
+    path = "/home/aesc/Pictures/Wallpapers/wallhaven-9oovg8.jpg"
+    theme_mode = "dark"
+    wallpaper_scheme = "m3-fruit-salad"
+
+    [[wallpaper.favorite]]
+    palette_source = "wallpaper"
+    path = "/home/aesc/Pictures/Wallpapers/Konachan.com - 374512 apron blue_eyes blush bocchi_the_rock! bondage bow breasts gag gn_nanon gotou_hitori long_hair maid pink_hair rope thighhighs.jpg"
+    theme_mode = "auto"
+    wallpaper_scheme = "m3-content"
+
+    [[wallpaper.favorite]]
+    palette_source = "wallpaper"
+    path = "/home/aesc/Pictures/Wallpapers/Konachan.com - 403284 animal aqua_hair bell bicycle braids building cat catgirl clouds drink gloves headband long_hair red_eyes shade sky stairs tail thighhighs yukoama.jpg"
+    theme_mode = "dark"
+    wallpaper_scheme = "m3-content"
+
+    [[wallpaper.favorite]]
+    palette_source = "wallpaper"
+    path = "/home/aesc/Pictures/Wallpapers/Konachan.com - 404289 bow breasts cleavage close elbow_gloves glasses gloves hat honkai__star_rail honkai_(series) long_hair necklace purple_eyes shali signed white_hair.jpg"
+    theme_mode = "dark"
+    wallpaper_scheme = "m3-fruit-salad"
+
+    [[wallpaper.favorite]]
+    palette_source = "wallpaper"
+    path = "/home/aesc/Pictures/Wallpapers/Topaz.(Honkai.Star.Rail).full.4166812.jpg"
+    theme_mode = "auto"
+    wallpaper_scheme = "m3-content"
+
+    [[wallpaper.favorite]]
+    palette_source = "wallpaper"
+    path = "/home/aesc/Pictures/Wallpapers/wallhaven-jeeq3q.png"
+    theme_mode = "dark"
+    wallpaper_scheme = "m3-fruit-salad"
+
+    [[wallpaper.favorite]]
+    palette_source = "wallpaper"
+    path = "/home/aesc/Pictures/Wallpapers/wallhaven-rqod21.png"
+    theme_mode = "dark"
+    wallpaper_scheme = "m3-fruit-salad"
+
+    [[wallpaper.favorite]]
+    palette_source = "wallpaper"
+    path = "/home/aesc/Pictures/Wallpapers/lake_forest_snow_130421_1920x1200.jpg"
+    theme_mode = "dark"
+    wallpaper_scheme = "m3-fruit-salad"
+
+    [[wallpaper.favorite]]
+    palette_source = "wallpaper"
+    path = "/home/aesc/Pictures/Wallpapers/wallhaven-5ykdq8.png"
+    theme_mode = "dark"
+    wallpaper_scheme = "m3-fruit-salad"
+
+    [[wallpaper.favorite]]
+    builtin_palette = "Gruvbox"
+    palette_source = "builtin"
+    path = "/home/aesc/Pictures/Wallpapers/nanallynte.jpg"
+    theme_mode = "dark"
+
+    [[wallpaper.favorite]]
+    builtin_palette = "Gruvbox"
+    palette_source = "builtin"
+    path = "/home/aesc/Pictures/Wallpapers/wallpaperflare.com_wallpaper.jpg"
+    theme_mode = "dark"
 
 [widget.network]
 show_label = false

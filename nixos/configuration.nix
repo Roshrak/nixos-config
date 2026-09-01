@@ -188,6 +188,7 @@ programs.noctalia-greeter = {
     unzip
     zip
     python3
+    nodejs
     nano
     neovim
     fastfetch

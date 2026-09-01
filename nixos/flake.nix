@@ -3,6 +3,10 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
+    # Keep the base system on the supported 26.05 channel while tracking the
+    # newer Codex CLI independently. This avoids a broad system upgrade just
+    # to receive Codex fixes.
+    codex-nixpkgs.url = "github:NixOS/nixpkgs/master";
     mango.url = "github:mangowm/mango";
     noctalia.url = "github:noctalia-dev/noctalia/cachix";
     lotus.url = "github:LotusInputMethod/fcitx5-lotus";
@@ -35,6 +39,7 @@
         let
           hostPath = hostRoot + "/${hostKey}";
           host = import (hostPath + "/host.nix");
+          codexPackage = inputs.codex-nixpkgs.legacyPackages.${host.system}.codex;
           hostModule = hostPath + "/default.nix";
           extraModules = host.extraModules or [ ];
         in
@@ -44,6 +49,13 @@
           modules = [
             (hostPath + "/hardware-configuration.nix")
             hostModule
+            ({ ... }: {
+              # Codex is intentionally sourced from the dedicated pinned
+              # input above instead of upgrading all NixOS packages.
+              nixpkgs.overlays = [
+                (_final: _prev: { codex = codexPackage; })
+              ];
+            })
             mango.nixosModules.mango
             ./comic-mono.nix
             noctalia.nixosModules.default
