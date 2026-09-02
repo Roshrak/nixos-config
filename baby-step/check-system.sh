@@ -132,11 +132,13 @@ else
     fail_check "Niri configuration validation failed"
 fi
 
-show_step 9 "$TOTAL" "Checking Noctalia configuration"
-if timeout 15 noctalia config validate >> "$LOG_FILE" 2>&1; then
+show_step 9 "$TOTAL" "Checking Noctalia & Sway configuration"
+if timeout 15 noctalia config validate >> "$LOG_FILE" 2>&1 && \
+   ([ ! -f "$HOME/.config/sway/config" ] || ! command -v sway >/dev/null 2>&1 || \
+    timeout 15 sway -C -c "$HOME/.config/sway/config" >> "$LOG_FILE" 2>&1); then
     ok
 else
-    fail_check "Noctalia configuration validation failed"
+    fail_check "Noctalia or Sway configuration validation failed"
 fi
 
 show_step 10 "$TOTAL" "Checking Fcitx5"

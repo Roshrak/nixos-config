@@ -1,5 +1,5 @@
 MY COMPUTER SUMMARY
-Updated: 2026-08-31 ~22:40 +07:00
+Updated: 2026-09-02 ~11:30 +07:00
 
 No secrets in this file (no passwords, keys, tokens, Wi-Fi names, IPs).
 It does show my username, computer model, and GitHub repo name.
@@ -8,15 +8,22 @@ MACHINE
 
 Hostname: tonelico-nix    Flake name: tonelico  (NOT the same)
 Correct target: /etc/nixos#tonelico
-NixOS 26.05, generation 58. Acer Swift SFG16-72, Intel Core Ultra 5 125U.
-Disk: 468 GiB NVMe, about 339 GiB free. /boot: about 914 MiB free.
+NixOS 26.05 (Yarara), Generation 61 (switched 2026-09-02).
+Acer Swift SFG16-72: Intel Core Ultra 5 125U, 15 GiB RAM, zram swap.
+Disk: 468 GiB NVMe, 98 GiB used, 347 GiB free (22% used). /boot: 914 MiB free.
 Login screen: Noctalia Greeter. Sessions: Mango+Noctalia, Plasma 6, Niri.
-Current session when updated: Niri on Wayland.
+Current session: Niri on Wayland.
 
-HEALTH (checked 2026-08-31)
+HEALTH (checked 2026-09-02)
 
-0 failed checks. 0 failed services. Network, audio, Bluetooth: OK.
-1 expected warning: my Git backup has repaired files not committed yet.
+0 failed system checks. 0 failed services. Network, audio, Bluetooth: OK.
+Virtualization: VM 'win11' and all ISO files verified and protected.
+
+MAINTENANCE & CLEANUP (2026-09-02)
+
+- Performed safe Nix garbage collection: freed 3.2 GiB (1,383 dead store paths removed).
+- All 7 maintenance scripts verified healthy (0 broken, 0 unsafe).
+- Added durable safety rules for AI agents: AGENTS.md, AI-MAINTENANCE-RULES.md, GEMINI.md.
 
 WHAT I USUALLY RUN
 
@@ -28,23 +35,10 @@ Local snapshot:   ~/baby-step/backup-config.sh
 
 SAFE TESTS (no update, switch, commit, or push)
 
-~/baby-step/check-system.sh                 -> expect: 0 failed checks; 1 warning
+~/baby-step/check-system.sh                 -> expect: 0 failed checks
 ~/baby-step/update-system.sh --check-only   -> expect: SUCCESS
 ~/baby-step/backup-config.sh --check-only   -> expect: SUCCESS
 ~/baby-step/update-and-push.sh --check-only -> expect: SUCCESS
-
-WHAT HAPPENED ON 2026-08-31
-
-An audit found 0 critical problems and fixed 12 maintenance-script problems
-(wrong Git paths, false success messages, unsafe backups, overlapping runs,
-browser/session cleanup). The laptop itself needed no repair.
-Nothing was updated, built, switched, committed, or pushed.
-
-STILL TO DO (next session, with my approval)
-
-1. Commit and push the repaired files in ~/nixos-config.
-   The script shows the changes and asks me to type PUSH first.
-2. Later: normal update with ~/baby-step/update-system.sh.
 
 IF SOMETHING FAILS
 
@@ -54,4 +48,4 @@ Cannot reach login: reboot, choose older generation in boot menu.
 Anything else: stop, copy the ERROR, ask an AI. Logs: ~/baby-step/logs
 
 FOR AN AI: show it this file first. If it needs more:
-~/baby-step/system-summary-for-ai.md and ~/baby-step/state/audit-2026-08-31.txt
+~/baby-step/system-summary-for-ai.md and ~/baby-step/system-audit.md

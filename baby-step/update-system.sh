@@ -119,7 +119,7 @@ fi
 show_step 2 "$TOTAL" "Creating a safety backup of flake.lock"
 if [ -f "$NIXOS_DIR/flake.lock" ]; then
     lock_existed=1
-    lock_backup="$BACKUP_DIR/flake.lock.before-update-$(date +%F-%H%M%S)"
+    lock_backup="$BACKUP_DIR/flake.lock.previous"
     if cp -a "$NIXOS_DIR/flake.lock" "$lock_backup" >> "$LOG_FILE" 2>&1; then
         show_ok
     else

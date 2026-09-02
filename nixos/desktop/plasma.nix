@@ -38,6 +38,10 @@
             # into the mango seed at session end via trap-on-TERM.
             sed 's|^Exec=.*|Exec=/home/aesc/.local/bin/mango-session-guarded|' "$f" \
               > "$out/share/wayland-sessions/$base"
+          elif [ "$base" = "sway.desktop" ]; then
+            # Guarded wrapper: persists Noctalia state into the sway profile on exit
+            sed 's|^Exec=.*|Exec=/home/aesc/.local/bin/sway-session-guarded|' "$f" \
+              > "$out/share/wayland-sessions/$base"
           else
             ln -s "$f" "$out/share/wayland-sessions/$base"
           fi

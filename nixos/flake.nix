@@ -65,6 +65,7 @@
             ./claude-code.nix
             ./desktop/plasma.nix      # KDE Plasma 6 second session
             ./desktop/niri.nix        # Niri third session
+            ./desktop/sway.nix        # Sway + Noctalia v5 fourth session
             ./configuration.nix
             ({ ... }: {
               networking.hostName = host.hostName;

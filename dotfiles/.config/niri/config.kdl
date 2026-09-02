@@ -28,6 +28,7 @@ environment {
 
     NIXOS_OZONE_WL "1"
     MOZ_ENABLE_WAYLAND "1"
+    WLR_NO_HARDWARE_CURSORS "1"
 }
 
 
@@ -65,9 +66,7 @@ spawn-at-startup "/run/current-system/sw/bin/lxqt-policykit-agent"
 // OUTPUTS
 // ============================================================
 
-// External HDMI monitor.
-// Physical position: LEFT.
-//
+// External HDMI monitor (LEFT).
 // 1920 × 1080
 // Vertically centered relative to the 1200px-high laptop panel.
 output "HDMI-A-1" {
@@ -77,9 +76,7 @@ output "HDMI-A-1" {
     position x=0 y=60
 }
 
-// Internal laptop panel.
-// Physical position: RIGHT.
-//
+// Internal laptop panel (MAIN / RIGHT).
 // 1920 × 1200
 output "eDP-1" {
     mode "1920x1200@60.096"
@@ -357,6 +354,11 @@ binds {
     // Fills the usable monitor area and restores on toggle.
     Mod+M {
         maximize-window-to-edges;
+    }
+
+    // Switch tiling / column width preset.
+    Mod+N {
+        switch-preset-column-width;
     }
 
     // True fullscreen.
@@ -640,3 +642,10 @@ binds {
         spawn "noctalia" "msg" "media" "previous";
     }
 }
+
+// Disable direct scanout on Intel GPU to prevent cursor after-images / ghosting at screen edges
+debug {
+    disable-direct-scanout
+    render-drm-device "/dev/dri/renderD128"
+}
+

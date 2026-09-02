@@ -56,5 +56,9 @@ tiles={"layoutDirection":"horizontal","tiles":[{"width":0.25},{"width":0.5},{"wi
 padding=4
 tiles={"layoutDirection":"horizontal","tiles":[{"width":0.25},{"width":0.5},{"width":0.25}]}
 
+[Windows]
+ActiveMouseScreen=true
+Placement=Centered
+
 [Xwayland]
 Scale=1

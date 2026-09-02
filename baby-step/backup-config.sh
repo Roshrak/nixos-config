@@ -123,7 +123,9 @@ show_step 2 "$TOTAL" "Validating desktop configuration"
 if timeout 15 mango -c "$HOME/.config/mango/config.conf" -p \
        >> "$LOG_FILE" 2>&1 &&
    timeout 15 niri validate >> "$LOG_FILE" 2>&1 &&
-   timeout 15 noctalia config validate >> "$LOG_FILE" 2>&1; then
+   timeout 15 noctalia config validate >> "$LOG_FILE" 2>&1 &&
+   ([ ! -f "$HOME/.config/sway/config" ] || ! command -v sway >/dev/null 2>&1 || \
+    timeout 15 sway -C -c "$HOME/.config/sway/config" >> "$LOG_FILE" 2>&1); then
     show_ok
 else
     show_failed
@@ -136,8 +138,8 @@ if [ "$check_only" -eq 1 ]; then
     exit 0
 fi
 
-stamp="$(date +%F-%H%M%S)"
-rollback_root="$BACKUP_DIR/repository-before-$stamp"
+rollback_root="$BACKUP_DIR/repository-previous"
+rm -rf -- "$rollback_root"
 SNAPSHOT_WORK="$(mktemp -d "$STATE_DIR/snapshot.XXXXXX")"
 mkdir -p "$rollback_root" "$SNAPSHOT_WORK/nixos"
 
@@ -149,7 +151,7 @@ while IFS= read -r -d '' source_path; do
             continue
             ;;
         hardware-configuration.nix)
-            cp -a "$source_path" "$BACKUP_DIR/hardware-configuration-$stamp.nix"
+            cp -a "$source_path" "$BACKUP_DIR/hardware-configuration.previous.nix"
             continue
             ;;
         *.nix|flake.lock|.gitignore|*.md|fonts/*.ttf|fonts/*/*.ttf) ;;
@@ -175,7 +177,7 @@ fi
 show_step 4 "$TOTAL" "Preparing selected user configuration"
 mkdir -p "$SNAPSHOT_WORK/dotconfig"
 for config_name in \
-    mango noctalia kitty fcitx5 nvim fastfetch niri theme-profiles \
+    mango noctalia kitty fcitx5 nvim fastfetch niri sway theme-profiles \
     plasma-workspace systemd; do
     source_dir="$HOME/.config/$config_name"
     [ -d "$source_dir" ] || continue
@@ -196,8 +198,9 @@ show_step 5 "$TOTAL" "Preparing helpers and baby-step tools"
 mkdir -p "$SNAPSHOT_WORK/local-bin"
 for helper_name in \
     apply-theme-profile clean-stray-sessions niri-session-guarded \
-    mango-session-guarded save-noctalia-profile noctalia-greeter-sync-smart \
-    mango-animation steam obs obs-safe obs-fix-recording-paths slogout; do
+    mango-session-guarded sway-session-guarded save-noctalia-profile \
+    noctalia-greeter-sync-smart mango-animation steam obs obs-safe \
+    obs-fix-recording-paths slogout; do
     if [ -f "$HOME/.local/bin/$helper_name" ]; then
         cp -a "$HOME/.local/bin/$helper_name" "$SNAPSHOT_WORK/local-bin/$helper_name"
     fi

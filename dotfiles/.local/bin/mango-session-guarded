@@ -1,26 +1,20 @@
 #!/usr/bin/env bash
-# mango-session-guarded — Exec target for mango.desktop (patched via
-# dm-sessions-share in plasma.nix), replaces upstream bare `mango`.
-#
-# Purpose: persist the session's Noctalia state into the mango seed when the
-# session ends, so in-session customizations (palette source, scheme,
-# wallpaper, widgets) survive to the next mango login.
-#
-# Why a trap: when greetd ends the login it SIGTERMs the session scope's
-# whole process tree - including this wrapper. A post-mango line would
-# never run; the trap fires during logind's pre-SIGKILL window instead
-# (KillStop timeout is 90s, the copy takes milliseconds).
+# mango-session-guarded — Exec target for mango.desktop
+# Applies Mango theme profile on start and saves changes on session exit.
 set -u
 
 SAVE=/home/aesc/.local/bin/save-noctalia-profile
+APPLY=/home/aesc/.local/bin/apply-theme-profile
 MANGO=/run/current-system/sw/bin/mango
+
+"$APPLY" mango >/dev/null 2>&1 || true
 
 on_exit() {
     "$SAVE" mango >/dev/null 2>&1 || true
 }
-trap on_exit EXIT TERM INT
+trap on_exit EXIT TERM INT HUP
 
-"$MANGO"
+"$MANGO" "$@"
 rc=$?
 
 trap - EXIT

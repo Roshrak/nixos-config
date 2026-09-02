@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# sway-session-guarded — Exec target for sway.desktop (patched via dm-sessions-share in plasma.nix)
+# Persists Sway's Noctalia wallpaper/theme state on session exit.
+set -u
+
+SAVE=/home/aesc/.local/bin/save-noctalia-profile
+APPLY=/home/aesc/.local/bin/apply-theme-profile
+SWAY=/run/current-system/sw/bin/sway
+
+"$APPLY" sway >/dev/null 2>&1 || true
+
+on_exit() {
+    "$SAVE" sway >/dev/null 2>&1 || true
+}
+trap on_exit EXIT TERM INT HUP
+
+"$SWAY" "$@"
+rc=$?
+
+trap - EXIT
+on_exit
+exit "$rc"

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# apply-theme-profile <mango|kde|niri>
+# apply-theme-profile <mango|kde|niri|sway>
 # Stamps shared config files with the chosen session profile at login,
-# so Mango, KDE and Niri keep independent looks.
+# so Mango, KDE, Niri, and Sway keep independent looks.
 #
 # Ownership:
 #   gtk-{3,4}.0/settings.ini + gsettings  - stamped per profile
@@ -12,10 +12,10 @@
 set -euo pipefail
 
 PROFILE_ROOT="$HOME/.config/theme-profiles"
-PROFILES=(mango kde niri)
+PROFILES=(mango kde niri sway)
 
 usage() {
-    echo "Usage: apply-theme-profile <mango|kde|niri>" >&2
+    echo "Usage: apply-theme-profile <mango|kde|niri|sway>" >&2
     exit 2
 }
 
@@ -47,7 +47,7 @@ done
 if [ -f "$src/gsettings.sh" ]; then
     export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/$(id -u)/bus}"
     # shellcheck disable=SC1090
-    source "$src/gsettings.sh"
+    source "$src/gsettings.sh" 2>/dev/null || true
 fi
 
 [ -f "$src/kitty/noctalia.conf" ] && \

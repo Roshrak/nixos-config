@@ -149,16 +149,16 @@ wallpaper_scheme = "vibrant"
 directory = "/home/aesc/Pictures/Wallpapers"
 
     [wallpaper.default]
-    path = "/home/aesc/Pictures/Wallpapers/wallhaven-5ykdq8.png"
+    path = "/home/aesc/Pictures/Wallpapers/wallhaven-rqod21.png"
 
     [wallpaper.last]
-    path = "/home/aesc/Pictures/Wallpapers/wallhaven-5ykdq8.png"
+    path = "/home/aesc/Pictures/Wallpapers/wallhaven-rqod21.png"
 
     [wallpaper.monitors.HDMI-A-1]
-    path = "/home/aesc/Pictures/Wallpapers/pexels-lauripoldre-24963115.jpg"
+    path = "/home/aesc/Pictures/Wallpapers/wallhaven-rqod21.png"
 
     [wallpaper.monitors.eDP-1]
-    path = "/home/aesc/Pictures/Wallpapers/wallhaven-5ykdq8.png"
+    path = "/home/aesc/Pictures/Wallpapers/wallhaven-rqod21.png"
 
     [[wallpaper.favorite]]
     palette_source = "wallpaper"

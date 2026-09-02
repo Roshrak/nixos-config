@@ -1,17 +1,6 @@
 #!/usr/bin/env bash
-# niri-session-guarded — Exec target for niri.desktop, replaces upstream
-# niri-session at the greeter layer.
-#
-# Invariant: the real niri-session refuses to run while `systemctl --user
-# is-active niri.service` reports anything but inactive. This wrapper makes
-# that true before exec'ing, handling every failure mode observed so far:
-#   * zombie compositor process whose wrapper tree greetd SIGTERMed
-#   * unit stuck in stop-post / deactivating from wedged teardown jobs
-#   * leftover failed state or stale runtime sockets
-#
-# Escalation ladder per attempt: stop unit -> TERM process -> wait 3 s ->
-# KILL -> wait for inactive. Never execs unless inactive is reached
-# (max ~3 attempts), because a blind exec just recreates the black screen.
+# niri-session-guarded — Exec target for niri.desktop
+# Handles niri.service recovery and persists Niri's Noctalia profile on session exit.
 set -u
 
 UID_ME="$(id -u)"
@@ -19,6 +8,15 @@ SYSTEMCTL=/run/current-system/sw/bin/systemctl
 PGREP=/run/current-system/sw/bin/pgrep
 PKILL=/run/current-system/sw/bin/pkill
 RM=/run/current-system/sw/bin/rm
+SAVE=/home/aesc/.local/bin/save-noctalia-profile
+APPLY=/home/aesc/.local/bin/apply-theme-profile
+
+"$APPLY" niri >/dev/null 2>&1 || true
+
+on_exit() {
+    "$SAVE" niri >/dev/null 2>&1 || true
+}
+trap on_exit EXIT TERM INT HUP
 
 state() { "$SYSTEMCTL" --user is-active niri.service 2>/dev/null || true; }
 
@@ -74,4 +72,9 @@ until [ "$(state)" = inactive ]; do
     force_cleanup
 done
 
-exec /run/current-system/sw/bin/niri-session
+/run/current-system/sw/bin/niri-session "$@"
+rc=$?
+
+trap - EXIT
+on_exit
+exit "$rc"

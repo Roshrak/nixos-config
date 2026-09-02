@@ -41,7 +41,7 @@
     description = "Aesc";
     extraGroups = [ "wheel" "networkmanager" "video" "render" "audio" "input" ];
   };
-  security.sudo.wheelNeedsPassword = true;
+  security.sudo.wheelNeedsPassword = false;
 
   # Mango compositor and a graphical login screen.
   programs.mango.enable = true;
@@ -56,6 +56,10 @@ programs.noctalia-greeter = {
       theme = "Bibata-Modern-Ice";
       size = 24;
       path = "${pkgs.bibata-cursors}/share/icons";
+    };
+
+    output = {
+      layout = "eDP-1:0,0; HDMI-A-1:1920,60";
     };
 
     keyboard.layout = "us";
