@@ -45,6 +45,13 @@ SAVE CONFIG LOCALLY WITHOUT COMMITTING OR PUSHING
 Run:
 ~/baby-step/backup-config.sh
 
+SYNC WALLPAPERS WITH GOOGLE DRIVE
+Upload:
+~/baby-step/sync-wallpapers.sh upload
+
+Download to a new machine:
+~/baby-step/sync-wallpapers.sh download
+
 IF A NEW SYSTEM WAS ACTIVATED AND THEN BROKE
 Open Terminal.
 Copy this command:

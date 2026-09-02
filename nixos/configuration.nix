@@ -206,6 +206,7 @@ programs.noctalia-greeter = {
     smartmontools
     nvme-cli
     xdg-utils
+    rclone
     codex
 
     # Icons
