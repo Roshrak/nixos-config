@@ -1,5 +1,5 @@
 MY COMPUTER SUMMARY
-Updated: 2026-09-02 ~11:30 +07:00
+Updated: 2026-09-02 ~21:18 +07:00
 
 No secrets in this file (no passwords, keys, tokens, Wi-Fi names, IPs).
 It does show my username, computer model, and GitHub repo name.
@@ -8,10 +8,10 @@ MACHINE
 
 Hostname: tonelico-nix    Flake name: tonelico  (NOT the same)
 Correct target: /etc/nixos#tonelico
-NixOS 26.05 (Yarara), Generation 61 (switched 2026-09-02).
+NixOS 26.05 (Yarara), Generation 71 (switched 2026-09-02).
 Acer Swift SFG16-72: Intel Core Ultra 5 125U, 15 GiB RAM, zram swap.
-Disk: 468 GiB NVMe, 98 GiB used, 347 GiB free (22% used). /boot: 914 MiB free.
-Login screen: Noctalia Greeter. Sessions: Mango+Noctalia, Plasma 6, Niri.
+Disk: 468 GiB NVMe, 104 GiB used, 341 GiB free (24% used). /boot: 968 MiB free.
+Login screen: Noctalia Greeter. Sessions: Mango+Noctalia, Plasma 6, Niri, Sway+Noctalia.
 Current session: Niri on Wayland.
 
 HEALTH (checked 2026-09-02)
@@ -22,8 +22,10 @@ Virtualization: VM 'win11' and all ISO files verified and protected.
 MAINTENANCE & CLEANUP (2026-09-02)
 
 - Performed safe Nix garbage collection: freed 3.2 GiB (1,383 dead store paths removed).
-- All 7 maintenance scripts verified healthy (0 broken, 0 unsafe).
-- Added durable safety rules for AI agents: AGENTS.md, AI-MAINTENANCE-RULES.md, GEMINI.md.
+- All maintenance scripts verified healthy and improved with single rolling backup retention.
+- Added Sway desktop validation and backup synchronization.
+- All 14 system health checks passed (100% OK).
+- Git configuration backup synchronized and pushed to GitHub main branch.
 
 WHAT I USUALLY RUN
 

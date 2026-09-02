@@ -1,15 +1,15 @@
 # Tonelico NixOS — AI Context Card
 
-Refreshed: 2026-09-02 ~11:30 +07:00. No secrets in this file. Shows username, hostname, hardware model, and GitHub repo identity.
+Refreshed: 2026-09-02 ~21:18 +07:00. No secrets in this file. Shows username, hostname, hardware model, and GitHub repo identity.
 
 ## SYSTEM
 
 - Hostname: `tonelico-nix` | Flake attr: `tonelico` (NOT the same!) | Always use `/etc/nixos#tonelico`
-- NixOS 26.05 (Yarara), kernel 7.2.2 #1-NixOS, active generation 61, fallback generation 60, x86_64
+- NixOS 26.05 (Yarara), kernel 7.2.2 #1-NixOS, active generation 71, fallback generation 61, x86_64
 - Acer Swift SFG16-72: Intel Core Ultra 5 125U, Meteor Lake iGPU, 15 GiB RAM, zram swap
-- Disk: 468 GiB NVMe (`/dev/nvme0n1p2`), 98 GiB used (22%), ~347 GiB free; `/boot` 1 GiB vfat ~914 MiB free (shared with Arch — never reformat)
+- Disk: 468 GiB NVMe (`/dev/nvme0n1p2`), 104 GiB used (24%), ~341 GiB free; `/boot` 1 GiB vfat ~968 MiB free (shared with Arch — never reformat)
 - User: `aesc` (UID 1000, wheel, libvirtd). TZ Asia/Ho_Chi_Minh. Locale en_US.UTF-8.
-- Login: greetd + Noctalia Greeter (SDDM intentionally off). Sessions: Mango+Noctalia, Plasma 6, Niri. Current: Niri on Wayland.
+- Login: greetd + Noctalia Greeter (SDDM intentionally off). Sessions: Mango+Noctalia, Plasma 6, Niri, Sway+Noctalia. Current: Niri on Wayland.
 - Audio: PipeWire + WirePlumber. Input: Fcitx5 + Unikey + Fcitx5 Lotus (Wayland frontend).
 - Health 2026-09-02: 0 failed system units, 0 failed user units. Network/DNS/Bluetooth/audio services OK.
 
