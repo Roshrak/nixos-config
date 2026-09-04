@@ -8,8 +8,14 @@ SYSTEMCTL=/run/current-system/sw/bin/systemctl
 PGREP=/run/current-system/sw/bin/pgrep
 PKILL=/run/current-system/sw/bin/pkill
 RM=/run/current-system/sw/bin/rm
-SAVE=/home/aesc/.local/bin/save-noctalia-profile
+SAVE=/home/aesc/.local/bin/save-theme-profile
 APPLY=/home/aesc/.local/bin/apply-theme-profile
+
+export KITTY_CONFIG_DIRECTORY="/home/aesc/.config/kitty/profiles/niri"
+systemctl --user import-environment KITTY_CONFIG_DIRECTORY 2>/dev/null || true
+if command -v dbus-update-activation-environment >/dev/null 2>&1; then
+    dbus-update-activation-environment --systemd KITTY_CONFIG_DIRECTORY 2>/dev/null || true
+fi
 
 "$APPLY" niri >/dev/null 2>&1 || true
 

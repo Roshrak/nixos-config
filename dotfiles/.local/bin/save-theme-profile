@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# save-theme-profile <mango|kde|niri|sway>
+# Persists the active session's Kitty, GTK, and Noctalia settings into the
+# named session profile so they survive reboot and remain completely isolated.
+set -euo pipefail
+
+PROFILE_ROOT="$HOME/.config/theme-profiles"
+PROFILES=(mango kde niri sway)
+
+usage() {
+    echo "Usage: save-theme-profile <mango|kde|niri|sway>" >&2
+    exit 2
+}
+
+[ $# -eq 1 ] || usage
+profile="$1"
+case " ${PROFILES[*]} " in
+    *" $profile "*) ;;
+    *) usage ;;
+esac
+
+dest="$PROFILE_ROOT/$profile"
+mkdir -p "$dest"
+
+atomic_copy() {
+    local from="$1" to="$2" tmpdir
+    tmpdir="$(dirname "$to")"
+    mkdir -p "$tmpdir"
+    local tmp
+    tmp="$(mktemp "$tmpdir/.save.XXXXXX")"
+    cp -a "$from" "$tmp"
+    mv -f "$tmp" "$to"
+}
+
+# 1. Save Noctalia State (if used)
+LIVE_NOCTALIA="${XDG_STATE_HOME:-$HOME/.local/state}/noctalia/settings.toml"
+if [ -f "$LIVE_NOCTALIA" ] && [ -s "$LIVE_NOCTALIA" ]; then
+    atomic_copy "$LIVE_NOCTALIA" "$dest/noctalia-state.toml"
+fi
+
+# 2. Save Kitty Configuration & Themes
+KITTY_SRC="$HOME/.config/kitty/profiles/$profile"
+if [ -d "$KITTY_SRC" ]; then
+    mkdir -p "$dest/kitty"
+    for f in "$KITTY_SRC"/*; do
+        [ -f "$f" ] || continue
+        base="$(basename "$f")"
+        atomic_copy "$f" "$dest/kitty/$base"
+    done
+fi
+
+# If Noctalia dynamically regenerated noctalia.conf in this session, save it
+if [ "$profile" != "kde" ] && [ -f "$HOME/.config/kitty/themes/noctalia.conf" ]; then
+    mkdir -p "$dest/kitty"
+    atomic_copy "$HOME/.config/kitty/themes/noctalia.conf" "$dest/kitty/noctalia.conf"
+fi
+
+# 3. Save GTK Settings
+if [ -f "$HOME/.config/gtk-3.0/settings.ini" ]; then
+    atomic_copy "$HOME/.config/gtk-3.0/settings.ini" "$dest/gtk-3.0/settings.ini"
+fi
+if [ -f "$HOME/.config/gtk-4.0/settings.ini" ]; then
+    atomic_copy "$HOME/.config/gtk-4.0/settings.ini" "$dest/gtk-4.0/settings.ini"
+fi
+if [ -f "$HOME/.gtkrc-2.0" ]; then
+    atomic_copy "$HOME/.gtkrc-2.0" "$dest/gtkrc-2.0"
+fi
+
+# 4. Save GSettings
+if command -v gsettings >/dev/null 2>&1; then
+    gtk_theme="$(gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null || true)"
+    icon_theme="$(gsettings get org.gnome.desktop.interface icon-theme 2>/dev/null || true)"
+    cursor_theme="$(gsettings get org.gnome.desktop.interface cursor-theme 2>/dev/null || true)"
+    cursor_size="$(gsettings get org.gnome.desktop.interface cursor-size 2>/dev/null || true)"
+    color_scheme="$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null || true)"
+    font_name="$(gsettings get org.gnome.desktop.interface font-name 2>/dev/null || true)"
+
+    if [ -n "$gtk_theme" ] && [ "$gtk_theme" != "''" ]; then
+        cat << GEOF > "$dest/gsettings.sh"
+#!/usr/bin/env bash
+# Snapshot of $profile gsettings
+set -euo pipefail
+gsettings_set() { gsettings set "\$1" "\$2" "\$3" 2>/dev/null || true; }
+gsettings_set org.gnome.desktop.interface gtk-theme "$gtk_theme"
+gsettings_set org.gnome.desktop.interface icon-theme "$icon_theme"
+gsettings_set org.gnome.desktop.interface cursor-theme "$cursor_theme"
+gsettings_set org.gnome.desktop.interface cursor-size "$cursor_size"
+gsettings_set org.gnome.desktop.interface color-scheme "$color_scheme"
+gsettings_set org.gnome.desktop.interface font-name "$font_name"
+GEOF
+        chmod +x "$dest/gsettings.sh"
+    fi
+fi
+
+echo "Saved theme profile: $profile -> $dest"

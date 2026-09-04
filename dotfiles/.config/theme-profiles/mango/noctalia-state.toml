@@ -2,10 +2,10 @@ config_version = 13
 
 [bar.default]
 background_opacity = 0.34999999217689037
-border = "primary"
+border = "secondary"
 capsule_border = "primary"
 capsule_thickness = 0.63999998942017555
-color = "on_surface"
+color = "tertiary"
 concave_edge_corners = false
 end = [ "media", "tray", "notifications", "clipboard", "network", "bluetooth", "battery", "session" ]
 icon_color = "secondary"
@@ -134,11 +134,11 @@ password_style = "random"
     transparency_mode = "glass"
 
 [theme]
-builtin = "Noctalia"
+builtin = "Gruvbox"
 community_palette = "Oxocarbon"
 custom_palette = "konachan-com-362509-bikini-bow-braids-breasts-bunny-fang-flowers-gray-eyes-headdress-long-hair-navel-red-hair-ribbons-rose-signed-swimsuit-thighhighs-wristwear-vib"
 mode = "dark"
-source = "wallpaper"
+source = "builtin"
 wallpaper_scheme = "vibrant"
 
     [theme.templates]
@@ -149,16 +149,16 @@ wallpaper_scheme = "vibrant"
 directory = "/home/aesc/Pictures/Wallpapers"
 
     [wallpaper.default]
-    path = "/home/aesc/Pictures/Wallpapers/wallhaven-rqod21.png"
+    path = "/home/aesc/Pictures/Wallpapers/wallpaperflare.com_wallpaper.jpg"
 
     [wallpaper.last]
-    path = "/home/aesc/Pictures/Wallpapers/wallhaven-rqod21.png"
+    path = "/home/aesc/Pictures/Wallpapers/wallpaperflare.com_wallpaper.jpg"
 
     [wallpaper.monitors.HDMI-A-1]
-    path = "/home/aesc/Pictures/Wallpapers/wallhaven-rqod21.png"
+    path = "/home/aesc/Pictures/Wallpapers/wallpaperflare.com_wallpaper.jpg"
 
     [wallpaper.monitors.eDP-1]
-    path = "/home/aesc/Pictures/Wallpapers/wallhaven-rqod21.png"
+    path = "/home/aesc/Pictures/Wallpapers/wallpaperflare.com_wallpaper.jpg"
 
     [[wallpaper.favorite]]
     palette_source = "wallpaper"

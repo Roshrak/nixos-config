@@ -30,7 +30,7 @@ focus output eDP-1
 # Input configuration
 input type:touchpad {
     tap enabled
-    natural_scroll disabled
+    natural_scroll enabled
     dwt enabled
 }
 
@@ -44,9 +44,10 @@ input type:keyboard {
 default_border pixel 1
 default_floating_border pixel 1
 smart_borders on
+hide_edge_borders --i3 smart
 workspace_layout tabbed
-gaps inner 2
-gaps outer 2
+gaps inner 0
+gaps outer 0
 
 # Catppuccin / Noctalia matching border colors
 # class                 border  backgr. text    indicator child_border
@@ -56,8 +57,8 @@ client.unfocused        #313244 #1e1e2e #6c7086 #313244   #313244
 client.urgent           #f38ba8 #1e1e2e #cdd6f4 #f38ba8   #f38ba8
 
 # Startup services
-exec --no-startup-id systemctl --user import-environment WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP SWAYSOCK
-exec --no-startup-id dbus-update-activation-environment --systemd WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP SWAYSOCK
+exec --no-startup-id systemctl --user import-environment WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP SWAYSOCK KITTY_CONFIG_DIRECTORY
+exec --no-startup-id dbus-update-activation-environment --systemd WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP SWAYSOCK KITTY_CONFIG_DIRECTORY
 exec --no-startup-id systemctl --user restart xdg-desktop-portal-wlr xdg-desktop-portal
 exec --no-startup-id /home/aesc/.local/bin/clean-stray-sessions
 exec --no-startup-id /home/aesc/.local/bin/apply-theme-profile sway

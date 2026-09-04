@@ -42,6 +42,10 @@
             # Guarded wrapper: persists Noctalia state into the sway profile on exit
             sed 's|^Exec=.*|Exec=/home/aesc/.local/bin/sway-session-guarded|' "$f" \
               > "$out/share/wayland-sessions/$base"
+          elif [ "$base" = "plasma.desktop" ]; then
+            # Guarded wrapper: persists theme profile on exit and isolates Kitty
+            sed 's|^Exec=.*|Exec=/home/aesc/.local/bin/plasma-session-guarded|' "$f" \
+              > "$out/share/wayland-sessions/$base"
           else
             ln -s "$f" "$out/share/wayland-sessions/$base"
           fi

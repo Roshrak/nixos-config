@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# plasma-session-guarded — Exec target for plasma.desktop
+# Applies KDE theme profile on start and persists theme changes on session exit.
+set -u
+
+SAVE=/home/aesc/.local/bin/save-theme-profile
+APPLY=/home/aesc/.local/bin/apply-theme-profile
+STARTPLASMA=/run/current-system/sw/bin/startplasma-wayland
+
+export KITTY_CONFIG_DIRECTORY="$HOME/.config/kitty/profiles/kde"
+systemctl --user import-environment KITTY_CONFIG_DIRECTORY 2>/dev/null || true
+if command -v dbus-update-activation-environment >/dev/null 2>&1; then
+    dbus-update-activation-environment --systemd KITTY_CONFIG_DIRECTORY 2>/dev/null || true
+fi
+
+"$APPLY" kde >/dev/null 2>&1 || true
+
+on_exit() {
+    "$SAVE" kde >/dev/null 2>&1 || true
+}
+trap on_exit EXIT TERM INT HUP
+
+if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+    dbus-run-session "$STARTPLASMA" "$@"
+    rc=$?
+else
+    "$STARTPLASMA" "$@"
+    rc=$?
+fi
+
+trap - EXIT
+on_exit
+exit "$rc"

@@ -31,7 +31,9 @@
 
     # Requested applications
     obs-studio
-    discord
+    (discord.override {
+      commandLineArgs = "--ozone-platform=x11";
+    })
     obsidian
     pkgs.libreoffice
 

@@ -3,9 +3,15 @@
 # Applies Mango theme profile on start and saves changes on session exit.
 set -u
 
-SAVE=/home/aesc/.local/bin/save-noctalia-profile
+SAVE=/home/aesc/.local/bin/save-theme-profile
 APPLY=/home/aesc/.local/bin/apply-theme-profile
 MANGO=/run/current-system/sw/bin/mango
+
+export KITTY_CONFIG_DIRECTORY="/home/aesc/.config/kitty/profiles/mango"
+systemctl --user import-environment KITTY_CONFIG_DIRECTORY 2>/dev/null || true
+if command -v dbus-update-activation-environment >/dev/null 2>&1; then
+    dbus-update-activation-environment --systemd KITTY_CONFIG_DIRECTORY 2>/dev/null || true
+fi
 
 "$APPLY" mango >/dev/null 2>&1 || true
 

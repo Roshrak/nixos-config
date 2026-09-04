@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
 # sway-session-guarded — Exec target for sway.desktop (patched via dm-sessions-share in plasma.nix)
-# Persists Sway's Noctalia wallpaper/theme state on session exit.
+# Persists Sway's theme profile on session exit.
 set -u
 
-SAVE=/home/aesc/.local/bin/save-noctalia-profile
+SAVE=/home/aesc/.local/bin/save-theme-profile
 APPLY=/home/aesc/.local/bin/apply-theme-profile
 SWAY=/run/current-system/sw/bin/sway
+
+export KITTY_CONFIG_DIRECTORY="/home/aesc/.config/kitty/profiles/sway"
+systemctl --user import-environment KITTY_CONFIG_DIRECTORY 2>/dev/null || true
+if command -v dbus-update-activation-environment >/dev/null 2>&1; then
+    dbus-update-activation-environment --systemd KITTY_CONFIG_DIRECTORY 2>/dev/null || true
+fi
 
 "$APPLY" sway >/dev/null 2>&1 || true
 

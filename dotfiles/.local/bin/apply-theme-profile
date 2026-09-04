@@ -1,14 +1,7 @@
 #!/usr/bin/env bash
 # apply-theme-profile <mango|kde|niri|sway>
-# Stamps shared config files with the chosen session profile at login,
-# so Mango, KDE, Niri, and Sway keep independent looks.
-#
-# Ownership:
-#   gtk-{3,4}.0/settings.ini + gsettings  - stamped per profile
-#   ~/.config/kitty/themes/noctalia.conf  - stamped per profile
-#       (regenerated live by Noctalia within the session)
-#   ~/.local/state/noctalia/settings.toml - stamped per profile
-#       (use save-noctalia-profile <name> to persist in-session changes)
+# Stamps shared and session config files with the chosen session profile at login,
+# so Mango, KDE, Niri, and Sway keep completely independent looks across reboots.
 set -euo pipefail
 
 PROFILE_ROOT="$HOME/.config/theme-profiles"
@@ -38,25 +31,54 @@ atomic_copy() {
     mv -f "$tmp" "$to"
 }
 
+# 1. GTK 3.0 & GTK 4.0 configuration
 for ver in 3 4; do
-    [ -f "$src/gtk-$ver.0/settings.ini" ] && \
-        atomic_copy "$src/gtk-$ver.0/settings.ini" \
-            "$HOME/.config/gtk-$ver.0/settings.ini"
+    if [ -f "$src/gtk-$ver.0/settings.ini" ]; then
+        atomic_copy "$src/gtk-$ver.0/settings.ini" "$HOME/.config/gtk-$ver.0/settings.ini"
+    fi
 done
 
+# 2. GTK 2.0 configuration
+if [ -f "$src/gtkrc-2.0" ]; then
+    atomic_copy "$src/gtkrc-2.0" "$HOME/.gtkrc-2.0"
+fi
+
+# 3. GSettings / dconf
 if [ -f "$src/gsettings.sh" ]; then
     export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/$(id -u)/bus}"
     # shellcheck disable=SC1090
     source "$src/gsettings.sh" 2>/dev/null || true
 fi
 
-[ -f "$src/kitty/noctalia.conf" ] && \
-    atomic_copy "$src/kitty/noctalia.conf" \
-        "$HOME/.config/kitty/themes/noctalia.conf"
+# 4. Kitty configuration directory isolation
+KITTY_TARGET_DIR="$HOME/.config/kitty/profiles/$profile"
+mkdir -p "$KITTY_TARGET_DIR"
 
-[ -f "$src/noctalia-state.toml" ] && \
-    atomic_copy "$src/noctalia-state.toml" \
-        "${XDG_STATE_HOME:-$HOME/.local/state}/noctalia/settings.toml"
+if [ -d "$src/kitty" ]; then
+    for f in "$src/kitty"/*; do
+        [ -f "$f" ] || continue
+        base="$(basename "$f")"
+        atomic_copy "$f" "$KITTY_TARGET_DIR/$base"
+    done
+fi
 
+export KITTY_CONFIG_DIRECTORY="$KITTY_TARGET_DIR"
+systemctl --user set-environment KITTY_CONFIG_DIRECTORY="$KITTY_TARGET_DIR" 2>/dev/null || true
+if command -v dbus-update-activation-environment >/dev/null 2>&1; then
+    dbus-update-activation-environment --systemd KITTY_CONFIG_DIRECTORY="$KITTY_TARGET_DIR" 2>/dev/null || true
+fi
+
+# Maintain legacy noctalia.conf for Sway/Mango/Niri tools that inspect global themes path
+if [ -f "$src/kitty/noctalia.conf" ]; then
+    atomic_copy "$src/kitty/noctalia.conf" "$HOME/.config/kitty/themes/noctalia.conf"
+fi
+
+# 5. Noctalia State
+if [ -f "$src/noctalia-state.toml" ]; then
+    mkdir -p "${XDG_STATE_HOME:-$HOME/.local/state}/noctalia"
+    atomic_copy "$src/noctalia-state.toml" "${XDG_STATE_HOME:-$HOME/.local/state}/noctalia/settings.toml"
+fi
+
+mkdir -p "${XDG_STATE_HOME:-$HOME/.local/state}/noctalia"
 echo "$(date '+%Y-%m-%d %H:%M:%S') applied=$profile" >> "${XDG_STATE_HOME:-$HOME/.local/state}/noctalia/.stamp.log"
 echo "Theme profile applied: $profile"

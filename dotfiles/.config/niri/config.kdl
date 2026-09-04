@@ -25,6 +25,7 @@ environment {
     XDG_CURRENT_DESKTOP "niri"
 
     TERMINAL "kitty"
+    KITTY_CONFIG_DIRECTORY "/home/aesc/.config/kitty/profiles/niri"
 
     NIXOS_OZONE_WL "1"
     MOZ_ENABLE_WAYLAND "1"

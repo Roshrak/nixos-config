@@ -198,7 +198,8 @@ show_step 5 "$TOTAL" "Preparing helpers and baby-step tools"
 mkdir -p "$SNAPSHOT_WORK/local-bin"
 for helper_name in \
     apply-theme-profile clean-stray-sessions niri-session-guarded \
-    mango-session-guarded sway-session-guarded save-noctalia-profile \
+    mango-session-guarded sway-session-guarded plasma-session-guarded \
+    save-noctalia-profile save-theme-profile \
     noctalia-greeter-sync-smart mango-animation steam obs obs-safe \
     obs-fix-recording-paths slogout; do
     if [ -f "$HOME/.local/bin/$helper_name" ]; then

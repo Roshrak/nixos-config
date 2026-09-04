@@ -1,0 +1,16 @@
+[Unit]
+Description=Antigravity Pro Bridge - Persistent Google AI Pro OpenAI Adapter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/home/aesc/.local/share/nix-roots/hermes-agent-env/bin/python3 /home/aesc/.hermes/agy_bridge.py
+WorkingDirectory=/home/aesc/.hermes
+Environment="PATH=/home/aesc/.nix-profile/bin:/nix/store/4lsw150ryq7z5za9b3ihqwfsv36347fh-antigravity-cli-1.1.24/bin:/run/current-system/sw/bin:/home/aesc/.local/bin:/usr/bin:/bin"
+Environment="HOME=/home/aesc"
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
