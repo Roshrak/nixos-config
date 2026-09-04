@@ -28,6 +28,9 @@ DRY_RUN=0
 WORK_DIR=""
 TARGET_CHANGED=0
 TARGET_BACKUP=""
+STAGE_DIR=""
+ACTIVATION_ATTEMPTED=0
+ACTIVATION_COMPLETED=0
 STAMP="$(date +%Y%m%d-%H%M%S)"
 
 say() {
@@ -85,6 +88,20 @@ cleanup() {
                 ;;
         esac
     fi
+    if [ -n "$STAGE_DIR" ] && [ -d "$STAGE_DIR" ]; then
+        case "$STAGE_DIR" in
+            */.nixos-bootstrap-stage-*)
+                if command -v run_root >/dev/null 2>&1; then
+                    run_root rm -rf -- "$STAGE_DIR" 2>/dev/null || true
+                else
+                    rm -rf -- "$STAGE_DIR" 2>/dev/null || true
+                fi
+                ;;
+            *)
+                warn "Staging directory was not removed because its path was unexpected: $STAGE_DIR"
+                ;;
+        esac
+    fi
 }
 
 on_error() {
@@ -93,8 +110,18 @@ on_error() {
     printf '\nERROR: %s stopped at line %s (exit %s).\n' \
         "$SCRIPT_NAME" "$line" "$status" >&2
     if [ "$TARGET_CHANGED" -eq 1 ]; then
-        printf 'The deployed configuration directory changed. Its previous copy is:\n%s\n' \
-            "$TARGET_BACKUP" >&2
+        if [ -n "$TARGET_BACKUP" ] && { [ -e "$TARGET_BACKUP" ] || [ -L "$TARGET_BACKUP" ]; }; then
+            printf 'The deployed configuration directory changed. Its previous copy is:\n%s\n' \
+                "$TARGET_BACKUP" >&2
+        else
+            printf 'The deployed configuration directory changed at:\n%s\n' \
+                "$TARGET_NIXOS" >&2
+        fi
+    fi
+    if [ "$ACTIVATION_COMPLETED" -eq 1 ]; then
+        printf 'A NixOS generation was activated before this failure occurred.\n' >&2
+    elif [ "$ACTIVATION_ATTEMPTED" -eq 1 ]; then
+        printf 'Activation was attempted before this failure occurred.\n' >&2
     else
         printf 'No NixOS generation was activated by this failure.\n' >&2
     fi
@@ -107,26 +134,31 @@ while [ "$#" -gt 0 ]; do
     case "$1" in
         --host)
             [ "$#" -ge 2 ] || fail "--host needs a value"
+            [ -n "$2" ] || fail "--host cannot be empty"
             HOST_KEY="$2"
             shift 2
             ;;
         --hostname)
             [ "$#" -ge 2 ] || fail "--hostname needs a value"
+            [ -n "$2" ] || fail "--hostname cannot be empty"
             HOSTNAME_REQUESTED="$2"
             shift 2
             ;;
         --system)
             [ "$#" -ge 2 ] || fail "--system needs a value"
+            [ -n "$2" ] || fail "--system cannot be empty"
             SYSTEM_REQUESTED="$2"
             shift 2
             ;;
         --hardware)
             [ "$#" -ge 2 ] || fail "--hardware needs a value"
+            [ -n "$2" ] || fail "--hardware path cannot be empty"
             HARDWARE_REQUESTED="$2"
             shift 2
             ;;
         --target-root)
             [ "$#" -ge 2 ] || fail "--target-root needs a value"
+            [ -n "$2" ] || fail "--target-root cannot be empty"
             TARGET_ROOT="$2"
             shift 2
             ;;
@@ -343,8 +375,11 @@ case "$HOST_SYSTEM" in
 esac
 [ "$HOST_USER" = "aesc" ] ||
     fail "This repository currently requires primaryUser = aesc because desktop paths are intentionally fixed to /home/aesc"
-case "$HOST_UID:$HOST_GID" in
-    *[!0-9:]*|:|*:) fail "Invalid numeric user ownership in host metadata" ;;
+case "$HOST_UID" in
+    ""|*[!0-9]*) fail "Invalid numeric user UID in host metadata: $HOST_UID" ;;
+esac
+case "$HOST_GID" in
+    ""|*[!0-9]*) fail "Invalid numeric user GID in host metadata: $HOST_GID" ;;
 esac
 
 if [ -n "$HARDWARE_REQUESTED" ]; then
@@ -478,7 +513,7 @@ sync_repository_host_file() {
     fi
     [ -w "$NIXOS_SOURCE" ] || fail "Repository source is not writable: $NIXOS_SOURCE"
     mkdir -p "$(dirname -- "$repository_file")"
-    if [ -e "$repository_file" ]; then
+    if [ -e "$repository_file" ] || [ -L "$repository_file" ]; then
         run_root install -d -m 0755 "$BACKUP_BASE/repository-host"
         run_root cp -a "$repository_file" \
             "$BACKUP_BASE/repository-host/$relative_name"
@@ -507,31 +542,33 @@ if [ -d "$TARGET_NIXOS/.git" ]; then
     run_root cp -a "$TARGET_NIXOS/.git" "$STAGE_DIR/.git"
 fi
 
-if [ -d "$TARGET_NIXOS" ] && diff -qr --exclude=.git "$STAGE_DIR" "$TARGET_NIXOS" >/dev/null; then
+if [ -d "$TARGET_NIXOS" ] && diff -qr --exclude=.git "$STAGE_DIR" "$TARGET_NIXOS" >/dev/null 2>&1; then
     case "$STAGE_DIR" in
         "$TARGET_PARENT"/.nixos-bootstrap-stage-*)
             run_root rm -rf -- "$STAGE_DIR"
+            STAGE_DIR=""
             ;;
         *) fail "Refusing to remove unexpected staging path: $STAGE_DIR" ;;
     esac
     say "[3/7] Preparing a recoverable /etc/nixos deployment... ALREADY CURRENT"
 else
-    if [ -e "$TARGET_NIXOS" ]; then
+    if [ -e "$TARGET_NIXOS" ] || [ -L "$TARGET_NIXOS" ]; then
         TARGET_BACKUP="$TARGET_NIXOS.before-bootstrap-$STAMP-$$"
-        if [ -e "$TARGET_BACKUP" ]; then
+        if [ -e "$TARGET_BACKUP" ] || [ -L "$TARGET_BACKUP" ]; then
             fail "Refusing to overwrite existing backup: $TARGET_BACKUP"
         fi
         run_root mv "$TARGET_NIXOS" "$TARGET_BACKUP"
     fi
     if ! run_root mv "$STAGE_DIR" "$TARGET_NIXOS"; then
-        if [ -e "$TARGET_BACKUP" ] && [ ! -e "$TARGET_NIXOS" ]; then
+        if { [ -e "$TARGET_BACKUP" ] || [ -L "$TARGET_BACKUP" ]; } && [ ! -e "$TARGET_NIXOS" ] && [ ! -L "$TARGET_NIXOS" ]; then
             run_root mv "$TARGET_BACKUP" "$TARGET_NIXOS"
         fi
         fail "Could not place the candidate at $TARGET_NIXOS; previous configuration restored"
     fi
+    STAGE_DIR=""
     TARGET_CHANGED=1
     say "[3/7] Preparing a recoverable /etc/nixos deployment... OK"
-    if [ -d "$TARGET_BACKUP" ]; then
+    if [ -e "$TARGET_BACKUP" ] || [ -L "$TARGET_BACKUP" ]; then
         say "  Previous configuration: $TARGET_BACKUP"
     fi
 fi
@@ -551,7 +588,7 @@ fi
 say "[4/7] Validating the deployed flake..."
 DEPLOYED_HOSTNAME="$(nix eval --raw \
     "path:$TARGET_NIXOS#nixosConfigurations.$HOST_KEY.config.networking.hostName")" || {
-        if [ "$TARGET_CHANGED" -eq 1 ] && [ -d "$TARGET_BACKUP" ]; then
+        if [ "$TARGET_CHANGED" -eq 1 ] && { [ -e "$TARGET_BACKUP" ] || [ -L "$TARGET_BACKUP" ]; }; then
             FAILED_TARGET="$TARGET_NIXOS.failed-$STAMP-$$"
             run_root mv "$TARGET_NIXOS" "$FAILED_TARGET"
             run_root mv "$TARGET_BACKUP" "$TARGET_NIXOS"
@@ -560,8 +597,16 @@ DEPLOYED_HOSTNAME="$(nix eval --raw \
         fi
         fail "Deployed flake validation failed"
     }
-[ "$DEPLOYED_HOSTNAME" = "$HOST_NAME" ] ||
-    fail "Deployed hostname is $DEPLOYED_HOSTNAME, expected $HOST_NAME"
+if [ "$DEPLOYED_HOSTNAME" != "$HOST_NAME" ]; then
+    if [ "$TARGET_CHANGED" -eq 1 ] && { [ -e "$TARGET_BACKUP" ] || [ -L "$TARGET_BACKUP" ]; }; then
+        FAILED_TARGET="$TARGET_NIXOS.failed-$STAMP-$$"
+        run_root mv "$TARGET_NIXOS" "$FAILED_TARGET"
+        run_root mv "$TARGET_BACKUP" "$TARGET_NIXOS"
+        TARGET_CHANGED=0
+        fail "Deployed hostname mismatch: expected $HOST_NAME, got $DEPLOYED_HOSTNAME; the previous /etc/nixos was restored"
+    fi
+    fail "Deployed hostname mismatch: expected $HOST_NAME, got $DEPLOYED_HOSTNAME"
+fi
 say "[4/7] Validating the deployed flake... OK"
 
 backup_and_replace_entry() {
@@ -569,12 +614,12 @@ backup_and_replace_entry() {
     local destination_entry="$2"
     local backup_entry="$3"
 
-    if [ -e "$destination_entry" ] && diff -qr "$source_entry" "$destination_entry" >/dev/null; then
+    if [ -e "$destination_entry" ] && diff -qr "$source_entry" "$destination_entry" >/dev/null 2>&1; then
         return 0
     fi
 
     run_root install -d -m 0755 "$(dirname -- "$destination_entry")"
-    if [ -e "$destination_entry" ]; then
+    if [ -e "$destination_entry" ] || [ -L "$destination_entry" ]; then
         run_root install -d -m 0755 "$(dirname -- "$backup_entry")"
         run_root mv "$destination_entry" "$backup_entry"
     fi
@@ -646,7 +691,9 @@ case "$ACTION" in
         ;;
     switch)
         run_root nixos-rebuild build --flake "$TARGET_NIXOS#$HOST_KEY"
+        ACTIVATION_ATTEMPTED=1
         run_root nixos-rebuild switch --flake "$TARGET_NIXOS#$HOST_KEY"
+        ACTIVATION_COMPLETED=1
         say "[7/7] Running requested final action... SWITCH OK"
         ;;
     install)
