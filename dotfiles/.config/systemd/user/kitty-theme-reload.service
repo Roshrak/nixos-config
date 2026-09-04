@@ -1,0 +1,7 @@
+[Unit]
+Description=Reload Kitty configuration on Noctalia theme change
+
+[Service]
+Type=oneshot
+ExecStart=-/run/current-system/sw/bin/pkill -SIGUSR1 -u %U -x kitty
+SuccessExitStatus=0 1

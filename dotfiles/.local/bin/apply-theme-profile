@@ -54,23 +54,28 @@ fi
 KITTY_TARGET_DIR="$HOME/.config/kitty/profiles/$profile"
 mkdir -p "$KITTY_TARGET_DIR"
 
-if [ -d "$src/kitty" ]; then
-    for f in "$src/kitty"/*; do
-        [ -f "$f" ] || continue
-        base="$(basename "$f")"
-        atomic_copy "$f" "$KITTY_TARGET_DIR/$base"
-    done
-fi
-
 export KITTY_CONFIG_DIRECTORY="$KITTY_TARGET_DIR"
 systemctl --user set-environment KITTY_CONFIG_DIRECTORY="$KITTY_TARGET_DIR" 2>/dev/null || true
 if command -v dbus-update-activation-environment >/dev/null 2>&1; then
     dbus-update-activation-environment --systemd KITTY_CONFIG_DIRECTORY="$KITTY_TARGET_DIR" 2>/dev/null || true
 fi
 
-# Maintain legacy noctalia.conf for Sway/Mango/Niri tools that inspect global themes path
-if [ -f "$src/kitty/noctalia.conf" ]; then
-    atomic_copy "$src/kitty/noctalia.conf" "$HOME/.config/kitty/themes/noctalia.conf"
+# Restore this session's saved wallpaper theme for Noctalia sessions
+if [ "$profile" != "kde" ]; then
+    if [ -f "$src/kitty/noctalia.conf" ]; then
+        atomic_copy "$src/kitty/noctalia.conf" "$HOME/.config/kitty/themes/noctalia.conf"
+    fi
+    if [ -f "$src/kitty/current-theme.conf" ] && [ -s "$src/kitty/current-theme.conf" ]; then
+        atomic_copy "$src/kitty/current-theme.conf" "$KITTY_TARGET_DIR/current-theme.conf"
+    fi
+else
+    # For KDE, restore KDE's own theme and kitten override if saved
+    if [ -f "$src/kitty/theme.conf" ]; then
+        atomic_copy "$src/kitty/theme.conf" "$KITTY_TARGET_DIR/theme.conf"
+    fi
+    if [ -f "$src/kitty/current-theme.conf" ] && [ -s "$src/kitty/current-theme.conf" ]; then
+        atomic_copy "$src/kitty/current-theme.conf" "$KITTY_TARGET_DIR/current-theme.conf"
+    fi
 fi
 
 # 5. Noctalia State

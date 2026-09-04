@@ -39,19 +39,22 @@ if [ -f "$LIVE_NOCTALIA" ] && [ -s "$LIVE_NOCTALIA" ]; then
 fi
 
 # 2. Save Kitty Configuration & Themes
+mkdir -p "$dest/kitty"
 KITTY_SRC="$HOME/.config/kitty/profiles/$profile"
 if [ -d "$KITTY_SRC" ]; then
-    mkdir -p "$dest/kitty"
-    for f in "$KITTY_SRC"/*; do
-        [ -f "$f" ] || continue
-        base="$(basename "$f")"
-        atomic_copy "$f" "$dest/kitty/$base"
-    done
+    if [ -f "$KITTY_SRC/kitty.conf" ]; then
+        atomic_copy "$KITTY_SRC/kitty.conf" "$dest/kitty/kitty.conf"
+    fi
+    if [ -f "$KITTY_SRC/current-theme.conf" ]; then
+        atomic_copy "$KITTY_SRC/current-theme.conf" "$dest/kitty/current-theme.conf"
+    fi
+    if [ -f "$KITTY_SRC/theme.conf" ]; then
+        atomic_copy "$KITTY_SRC/theme.conf" "$dest/kitty/theme.conf"
+    fi
 fi
 
-# If Noctalia dynamically regenerated noctalia.conf in this session, save it
+# For Noctalia sessions, save the active wallpaper-generated colors
 if [ "$profile" != "kde" ] && [ -f "$HOME/.config/kitty/themes/noctalia.conf" ]; then
-    mkdir -p "$dest/kitty"
     atomic_copy "$HOME/.config/kitty/themes/noctalia.conf" "$dest/kitty/noctalia.conf"
 fi
 

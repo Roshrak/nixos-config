@@ -187,7 +187,7 @@ for config_name in \
         \( -name '*.bak' -o -name '*.bak-*' -o -name '*.before-*' \
            -o -name '*.backup' -o -name '*.old' \) -delete
 done
-for config_file in mimeapps.list kwinrc user-dirs.dirs; do
+for config_file in mimeapps.list kwinrc kwinrulesrc plasma-org.kde.plasma.desktop-appletsrc user-dirs.dirs; do
     if [ -f "$HOME/.config/$config_file" ]; then
         cp -a "$HOME/.config/$config_file" "$SNAPSHOT_WORK/dotconfig/$config_file"
     fi

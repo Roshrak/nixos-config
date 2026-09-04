@@ -1,0 +1,18 @@
+[General]
+count=2
+rules=cfab7229-061e-4aa0-8f45-f847a3038f99,kitty-screen-rule
+
+[cfab7229-061e-4aa0-8f45-f847a3038f99]
+Description=Universal Normal Window Size
+size=1400,850
+sizerule=3
+types=1
+screenrule=2
+
+[kitty-screen-rule]
+Description=Kitty Window Screen Placement
+screen=1
+screenrule=2
+types=1
+wmclass=kitty
+wmclassmatch=1

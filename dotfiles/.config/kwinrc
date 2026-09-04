@@ -58,7 +58,7 @@ tiles={"layoutDirection":"horizontal","tiles":[{"width":0.25},{"width":0.5},{"wi
 
 [Windows]
 ActiveMouseScreen=true
-Placement=Centered
+Placement=UnderMouse
 
 [Xwayland]
 Scale=1
