@@ -1,5 +1,6 @@
 [Unit]
 Description=Reload Kitty configuration on Noctalia theme change
+StartLimitIntervalSec=0
 
 [Service]
 Type=oneshot

@@ -1,8 +1,9 @@
 [Unit]
 Description=Watch Noctalia Kitty Theme for Live Reload
+StartLimitIntervalSec=0
 
 [Path]
-PathModified=%h/.config/kitty/themes/noctalia.conf
+PathChanged=%h/.config/kitty/themes/noctalia.conf
 
 [Install]
 WantedBy=default.target
