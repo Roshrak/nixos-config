@@ -11,6 +11,9 @@ let
         exit 2
         ;;
     esac
+    if [ "$#" -ge 1 ] && [ "$1" = "$profile" ]; then
+      shift
+    fi
     export THEME_PROFILE="$profile"
     export NOCTALIA_CONFIG_HOME="$HOME/.config/theme-profiles/$profile/config-home"
     export NOCTALIA_STATE_HOME="$HOME/.local/state/theme-profiles/$profile"
@@ -255,6 +258,8 @@ QTEOF
     PKILL=/run/current-system/sw/bin/pkill
     RM=/run/current-system/sw/bin/rm
 
+    pkill -u "$UID_ME" -f '(\.noctalia-wrapped|/bin/noctalia)' >/dev/null 2>&1 || true
+
     export THEME_PROFILE="niri"
     export NOCTALIA_CONFIG_HOME="$HOME/.config/theme-profiles/niri/config-home"
     export NOCTALIA_STATE_HOME="$HOME/.local/state/theme-profiles/niri"
@@ -328,7 +333,7 @@ QTEOF
 
   swaySessionGuarded = pkgs.writeShellScriptBin "sway-session-guarded" ''
     set -u
-    pkill -u "$(id -u)" -x noctalia >/dev/null 2>&1 || true
+    pkill -u "$(id -u)" -f '(\.noctalia-wrapped|/bin/noctalia)' >/dev/null 2>&1 || true
 
     export THEME_PROFILE="sway"
     export NOCTALIA_CONFIG_HOME="$HOME/.config/theme-profiles/sway/config-home"
@@ -353,7 +358,7 @@ QTEOF
 
   mangoSessionGuarded = pkgs.writeShellScriptBin "mango-session-guarded" ''
     set -u
-    pkill -u "$(id -u)" -x noctalia >/dev/null 2>&1 || true
+    pkill -u "$(id -u)" -f '(\.noctalia-wrapped|/bin/noctalia)' >/dev/null 2>&1 || true
 
     export THEME_PROFILE="mango"
     export NOCTALIA_CONFIG_HOME="$HOME/.config/theme-profiles/mango/config-home"
@@ -378,7 +383,7 @@ QTEOF
 
   plasmaSessionGuarded = pkgs.writeShellScriptBin "plasma-session-guarded" ''
     set -u
-    pkill -u "$(id -u)" -x noctalia >/dev/null 2>&1 || true
+    pkill -u "$(id -u)" -f '(\.noctalia-wrapped|/bin/noctalia)' >/dev/null 2>&1 || true
 
     export THEME_PROFILE="kde"
     export KITTY_CONFIG_DIRECTORY="$HOME/.config/kitty/profiles/kde"
