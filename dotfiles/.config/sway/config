@@ -10,6 +10,9 @@ font pango:JetBrainsMono Nerd Font 10
 # Cursor theme
 seat * xcursor_theme Bibata-Modern-Ice 24
 
+# Disable default swaybg so Noctalia handles wallpaper
+swaybg_command -
+
 # Output configuration: External HDMI-A-1 is on the LEFT (pos 0 0), Built-in eDP-1 is on the RIGHT (pos 1920 0)
 output HDMI-A-1 pos 0 0 res 1920x1080
 output eDP-1 pos 1920 0 res 1920x1200
