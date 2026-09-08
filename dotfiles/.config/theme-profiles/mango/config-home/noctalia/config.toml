@@ -1,0 +1,8 @@
+[include]
+autoload = false
+files = [
+  "/home/aesc/.config/noctalia/config.toml",
+  "/home/aesc/.config/noctalia/99-comic-mono.toml",
+  "/home/aesc/.config/noctalia/99-media-paths.toml",
+  "profile-templates.toml",
+]

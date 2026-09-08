@@ -1,0 +1,48 @@
+[theme.templates]
+enable_builtin_templates = false
+enable_community_templates = false
+builtin_ids = []
+community_ids = []
+
+[theme.templates.user.kitty]
+input_path = "/run/current-system/sw/share/noctalia/assets/templates/kitty/kitty.conf"
+output_path = "/home/aesc/.config/kitty/profiles/sway/theme.conf"
+post_hook = "pkill -SIGUSR1 -u $(id -u) -x kitty"
+
+[theme.templates.user.gtk3]
+input_path = "/run/current-system/sw/share/noctalia/assets/templates/gtk/gtk3.css"
+output_path = [
+  "/home/aesc/.local/state/theme-profiles/sway/generated/gtk3/noctalia.css",
+  "/home/aesc/.config/gtk-3.0/theme-active.css"
+]
+
+[theme.templates.user.gtk4]
+input_path = "/run/current-system/sw/share/noctalia/assets/templates/gtk/gtk4.css"
+output_path = [
+  "/home/aesc/.local/state/theme-profiles/sway/generated/gtk4/noctalia.css",
+  "/home/aesc/.config/gtk-4.0/theme-active.css"
+]
+
+[theme.templates.user.qt]
+input_path = "/run/current-system/sw/share/noctalia/assets/templates/qt/qtct.conf"
+output_path = [
+  "/home/aesc/.local/state/theme-profiles/sway/generated/qt/noctalia.conf",
+  "/home/aesc/.config/qt5ct/colors/noctalia.conf",
+  "/home/aesc/.config/qt6ct/colors/noctalia.conf"
+]
+
+[theme.templates.user.sway]
+input_path = "/run/current-system/sw/share/noctalia/assets/templates/sway/sway"
+output_path = [
+  "/home/aesc/.local/state/theme-profiles/sway/generated/sway/colors",
+  "/home/aesc/.config/sway/colors"
+]
+post_hook = "swaymsg reload"
+
+[theme.templates.user.btop]
+input_path = "/run/current-system/sw/share/noctalia/assets/templates/btop/btop.theme"
+output_path = "/home/aesc/.local/state/theme-profiles/sway/generated/btop/noctalia.theme"
+
+[theme.templates.user.cava]
+input_path = "/run/current-system/sw/share/noctalia/assets/templates/cava/cava.ini"
+output_path = "/home/aesc/.local/state/theme-profiles/sway/generated/cava/noctalia"
