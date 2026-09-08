@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # save-theme-profile <mango|kde|niri|sway>
-# Persists the active session's Kitty, GTK, and Noctalia settings into the
+# Persists the active session's Kitty, GTK, Qt, and Noctalia settings into the
 # named session profile so they survive reboot and remain completely isolated.
 set -euo pipefail
 
@@ -20,10 +20,11 @@ case " ${PROFILES[*]} " in
 esac
 
 dest="$PROFILE_ROOT/$profile"
-mkdir -p "$dest"
+mkdir -p "$dest/kitty" "$dest/gtk-3.0" "$dest/gtk-4.0" "$dest/qt5ct/colors" "$dest/qt6ct/colors"
 
 atomic_copy() {
     local from="$1" to="$2" tmpdir
+    [ -f "$from" ] || return 0
     tmpdir="$(dirname "$to")"
     mkdir -p "$tmpdir"
     local tmp
@@ -33,43 +34,77 @@ atomic_copy() {
 }
 
 # 1. Save Noctalia State (if used)
-LIVE_NOCTALIA="${XDG_STATE_HOME:-$HOME/.local/state}/noctalia/settings.toml"
-if [ -f "$LIVE_NOCTALIA" ] && [ -s "$LIVE_NOCTALIA" ]; then
-    atomic_copy "$LIVE_NOCTALIA" "$dest/noctalia-state.toml"
-fi
-
-# 2. Save Kitty Configuration & Themes
-mkdir -p "$dest/kitty"
-KITTY_SRC="$HOME/.config/kitty/profiles/$profile"
-if [ -d "$KITTY_SRC" ]; then
-    if [ -f "$KITTY_SRC/kitty.conf" ]; then
-        atomic_copy "$KITTY_SRC/kitty.conf" "$dest/kitty/kitty.conf"
+if [ "$profile" != "kde" ]; then
+    LIVE_NOCTALIA="${NOCTALIA_STATE_HOME:-$dest/noctalia-state}/settings.toml"
+    if [ ! -f "$LIVE_NOCTALIA" ]; then
+        LIVE_NOCTALIA="${XDG_STATE_HOME:-$HOME/.local/state}/noctalia/settings.toml"
     fi
-    if [ -f "$KITTY_SRC/current-theme.conf" ]; then
-        atomic_copy "$KITTY_SRC/current-theme.conf" "$dest/kitty/current-theme.conf"
-    fi
-    if [ -f "$KITTY_SRC/theme.conf" ]; then
-        atomic_copy "$KITTY_SRC/theme.conf" "$dest/kitty/theme.conf"
+    if [ -f "$LIVE_NOCTALIA" ] && [ -s "$LIVE_NOCTALIA" ]; then
+        atomic_copy "$LIVE_NOCTALIA" "$dest/noctalia-state.toml"
+        atomic_copy "$LIVE_NOCTALIA" "$dest/noctalia-state/settings.toml"
     fi
 fi
 
-# For Noctalia sessions, save the active wallpaper-generated colors
-if [ "$profile" != "kde" ] && [ -f "$HOME/.config/kitty/themes/noctalia.conf" ]; then
-    atomic_copy "$HOME/.config/kitty/themes/noctalia.conf" "$dest/kitty/noctalia.conf"
+# 2. Save Kitty Theme
+if [ -f "$HOME/.config/kitty/themes/${profile}.conf" ]; then
+    atomic_copy "$HOME/.config/kitty/themes/${profile}.conf" "$dest/kitty/theme.conf"
+elif [ -f "$HOME/.config/kitty/profiles/$profile/theme.conf" ]; then
+    atomic_copy "$HOME/.config/kitty/profiles/$profile/theme.conf" "$dest/kitty/theme.conf"
 fi
 
-# 3. Save GTK Settings
+# 3. Save GTK Settings & CSS
 if [ -f "$HOME/.config/gtk-3.0/settings.ini" ]; then
     atomic_copy "$HOME/.config/gtk-3.0/settings.ini" "$dest/gtk-3.0/settings.ini"
 fi
+if [ -f "$HOME/.config/gtk-3.0/gtk.css" ]; then
+    atomic_copy "$HOME/.config/gtk-3.0/gtk.css" "$dest/gtk-3.0/gtk.css"
+fi
+if [ "$profile" != "kde" ] && [ -f "$HOME/.config/gtk-3.0/noctalia.css" ]; then
+    atomic_copy "$HOME/.config/gtk-3.0/noctalia.css" "$dest/gtk-3.0/noctalia.css"
+fi
+
 if [ -f "$HOME/.config/gtk-4.0/settings.ini" ]; then
     atomic_copy "$HOME/.config/gtk-4.0/settings.ini" "$dest/gtk-4.0/settings.ini"
 fi
+if [ -f "$HOME/.config/gtk-4.0/gtk.css" ]; then
+    atomic_copy "$HOME/.config/gtk-4.0/gtk.css" "$dest/gtk-4.0/gtk.css"
+fi
+if [ "$profile" != "kde" ] && [ -f "$HOME/.config/gtk-4.0/noctalia.css" ]; then
+    atomic_copy "$HOME/.config/gtk-4.0/noctalia.css" "$dest/gtk-4.0/noctalia.css"
+fi
+
 if [ -f "$HOME/.gtkrc-2.0" ]; then
     atomic_copy "$HOME/.gtkrc-2.0" "$dest/gtkrc-2.0"
 fi
 
-# 4. Save GSettings
+# 4. Save Qt Colors
+if [ -f "$HOME/.config/qt5ct/colors/noctalia.conf" ]; then
+    atomic_copy "$HOME/.config/qt5ct/colors/noctalia.conf" "$dest/qt5ct/colors/noctalia.conf"
+fi
+if [ -f "$HOME/.config/qt6ct/colors/noctalia.conf" ]; then
+    atomic_copy "$HOME/.config/qt6ct/colors/noctalia.conf" "$dest/qt6ct/colors/noctalia.conf"
+fi
+
+# 5. Save Compositor Colors
+case "$profile" in
+    niri)
+        if [ -f "$HOME/.config/niri/colors.kdl" ]; then
+            atomic_copy "$HOME/.config/niri/colors.kdl" "$dest/colors.kdl"
+        fi
+        ;;
+    sway)
+        if [ -f "$HOME/.config/sway/colors" ]; then
+            atomic_copy "$HOME/.config/sway/colors" "$dest/colors"
+        fi
+        ;;
+    mango)
+        if [ -f "$HOME/.config/mango/noctalia.conf" ]; then
+            atomic_copy "$HOME/.config/mango/noctalia.conf" "$dest/colors.conf"
+        fi
+        ;;
+esac
+
+# 6. Save GSettings
 if command -v gsettings >/dev/null 2>&1; then
     gtk_theme="$(gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null || true)"
     icon_theme="$(gsettings get org.gnome.desktop.interface icon-theme 2>/dev/null || true)"

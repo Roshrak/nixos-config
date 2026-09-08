@@ -31,20 +31,16 @@
         for f in ${config.services.displayManager.sessionData.desktops}/share/wayland-sessions/*.desktop; do
           base="$(basename "$f")"
           if [ "$base" = "niri.desktop" ]; then
-            sed 's|^Exec=.*|Exec=/home/aesc/.local/bin/niri-session-guarded|' "$f" \
+            sed 's|^Exec=.*|Exec=/run/current-system/sw/bin/niri-session-guarded|' "$f" \
               > "$out/share/wayland-sessions/$base"
           elif [ "$base" = "mango.desktop" ]; then
-            # Guarded wrapper: persists Noctalia state (palette source/scheme)
-            # into the mango seed at session end via trap-on-TERM.
-            sed 's|^Exec=.*|Exec=/home/aesc/.local/bin/mango-session-guarded|' "$f" \
+            sed 's|^Exec=.*|Exec=/run/current-system/sw/bin/mango-session-guarded|' "$f" \
               > "$out/share/wayland-sessions/$base"
           elif [ "$base" = "sway.desktop" ]; then
-            # Guarded wrapper: persists Noctalia state into the sway profile on exit
-            sed 's|^Exec=.*|Exec=/home/aesc/.local/bin/sway-session-guarded|' "$f" \
+            sed 's|^Exec=.*|Exec=/run/current-system/sw/bin/sway-session-guarded|' "$f" \
               > "$out/share/wayland-sessions/$base"
           elif [ "$base" = "plasma.desktop" ]; then
-            # Guarded wrapper: persists theme profile on exit and isolates Kitty
-            sed 's|^Exec=.*|Exec=/home/aesc/.local/bin/plasma-session-guarded|' "$f" \
+            sed 's|^Exec=.*|Exec=/run/current-system/sw/bin/plasma-session-guarded|' "$f" \
               > "$out/share/wayland-sessions/$base"
           else
             ln -s "$f" "$out/share/wayland-sessions/$base"

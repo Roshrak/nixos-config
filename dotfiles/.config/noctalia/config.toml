@@ -29,3 +29,8 @@ contact_shadow = false
 
 [dock]
 shadow = false
+
+[hooks]
+colors_changed = ["/run/current-system/sw/bin/theme-profile-sync"]
+wallpaper_changed = ["/run/current-system/sw/bin/theme-profile-sync"]
+theme_mode_changed = ["/run/current-system/sw/bin/theme-profile-sync"]

@@ -66,6 +66,7 @@
             ./desktop/plasma.nix      # KDE Plasma 6 second session
             ./desktop/niri.nix        # Niri third session
             ./desktop/sway.nix        # Sway + Noctalia v5 fourth session
+            ./desktop/theme-profiles.nix # Isolated theme profiles for Niri, Sway, Mango, KDE
             ./configuration.nix
             ({ ... }: {
               networking.hostName = host.hostName;

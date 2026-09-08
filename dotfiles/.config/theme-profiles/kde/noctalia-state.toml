@@ -142,7 +142,7 @@ source = "wallpaper"
 wallpaper_scheme = "vibrant"
 
     [theme.templates]
-    builtin_ids = [ "btop", "cava", "gtk3", "gtk4", "kitty", "mango", "qt" ]
+    builtin_ids = [ "btop", "cava" ]
     community_ids = [ "discord", "obsidian", "prismlauncher", "obs" ]
 
 [wallpaper]

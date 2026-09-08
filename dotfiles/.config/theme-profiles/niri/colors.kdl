@@ -1,0 +1,7 @@
+// Generated automatically from Noctalia palette for Niri session
+layout {
+    border {
+        active-color "#ffb4a8"
+        inactive-color "#45475a"
+    }
+}

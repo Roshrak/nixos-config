@@ -56,14 +56,17 @@ client.focused_inactive #45475a #1e1e2e #a6adc8 #45475a   #45475a
 client.unfocused        #313244 #1e1e2e #6c7086 #313244   #313244
 client.urgent           #f38ba8 #1e1e2e #cdd6f4 #f38ba8   #f38ba8
 
+# Include dynamic session border colors
+include ~/.config/sway/colors
+
 # Startup services
-exec --no-startup-id systemctl --user import-environment WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP SWAYSOCK KITTY_CONFIG_DIRECTORY
-exec --no-startup-id dbus-update-activation-environment --systemd WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP SWAYSOCK KITTY_CONFIG_DIRECTORY
+exec --no-startup-id systemctl --user import-environment WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP SWAYSOCK KITTY_CONFIG_DIRECTORY THEME_PROFILE NOCTALIA_STATE_HOME NOCTALIA_CONFIG_HOME QT_QPA_PLATFORMTHEME
+exec --no-startup-id dbus-update-activation-environment --systemd WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP SWAYSOCK KITTY_CONFIG_DIRECTORY THEME_PROFILE NOCTALIA_STATE_HOME NOCTALIA_CONFIG_HOME QT_QPA_PLATFORMTHEME
 exec --no-startup-id systemctl --user restart xdg-desktop-portal-wlr xdg-desktop-portal
 exec --no-startup-id /home/aesc/.local/bin/clean-stray-sessions
-exec --no-startup-id /home/aesc/.local/bin/apply-theme-profile sway
+exec --no-startup-id /run/current-system/sw/bin/theme-profile-activate sway
 exec --no-startup-id lxqt-policykit-agent
-exec --no-startup-id noctalia
+exec --no-startup-id /run/current-system/sw/bin/noctalia-profile sway
 exec --no-startup-id fcitx5 -d
 
 # Application & shell keybindings (matching Mango & Niri)
@@ -157,3 +160,4 @@ bindsym $mod+r reload
 bindsym $mod+Shift+c reload
 bindsym $mod+Shift+r restart
 bindsym $mod+Shift+Mod1+m exit
+

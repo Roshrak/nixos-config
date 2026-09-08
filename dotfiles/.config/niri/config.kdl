@@ -26,6 +26,10 @@ environment {
 
     TERMINAL "kitty"
     KITTY_CONFIG_DIRECTORY "/home/aesc/.config/kitty/profiles/niri"
+    THEME_PROFILE "niri"
+    NOCTALIA_STATE_HOME "/home/aesc/.local/state/theme-profiles/niri"
+    NOCTALIA_CONFIG_HOME "/home/aesc/.config/theme-profiles/niri/config-home"
+    QT_QPA_PLATFORMTHEME "qt6ct"
 
     NIXOS_OZONE_WL "1"
     MOZ_ENABLE_WAYLAND "1"
@@ -51,13 +55,13 @@ cursor {
 // ============================================================
 
 // Apply Niri's own theme before Noctalia starts.
-spawn-at-startup "/home/aesc/.local/bin/apply-theme-profile" "niri"
+spawn-at-startup "/run/current-system/sw/bin/theme-profile-activate" "niri"
 
 // Clean stale graphical sessions.
 spawn-at-startup "/home/aesc/.local/bin/clean-stray-sessions"
 
 // Desktop shell.
-spawn-at-startup "noctalia"
+spawn-at-startup "/run/current-system/sw/bin/noctalia-profile" "niri"
 
 // Authentication / privilege prompts.
 spawn-at-startup "/run/current-system/sw/bin/lxqt-policykit-agent"
@@ -650,3 +654,5 @@ debug {
     render-drm-device "/dev/dri/renderD128"
 }
 
+// Dynamic session colors generated from theme profile
+include "colors.kdl"

@@ -7,10 +7,16 @@ SAVE=/home/aesc/.local/bin/save-theme-profile
 APPLY=/home/aesc/.local/bin/apply-theme-profile
 MANGO=/run/current-system/sw/bin/mango
 
-export KITTY_CONFIG_DIRECTORY="/home/aesc/.config/kitty/profiles/mango"
-systemctl --user import-environment KITTY_CONFIG_DIRECTORY 2>/dev/null || true
+# Clean any lingering noctalia process from previous session
+pkill -u "$(id -u)" -x noctalia >/dev/null 2>&1 || true
+
+export THEME_PROFILE="mango"
+export NOCTALIA_STATE_HOME="$HOME/.config/theme-profiles/mango/noctalia-state"
+export KITTY_CONFIG_DIRECTORY="$HOME/.config/kitty/profiles/mango"
+
+systemctl --user import-environment THEME_PROFILE NOCTALIA_STATE_HOME KITTY_CONFIG_DIRECTORY 2>/dev/null || true
 if command -v dbus-update-activation-environment >/dev/null 2>&1; then
-    dbus-update-activation-environment --systemd KITTY_CONFIG_DIRECTORY 2>/dev/null || true
+    dbus-update-activation-environment --systemd THEME_PROFILE NOCTALIA_STATE_HOME KITTY_CONFIG_DIRECTORY 2>/dev/null || true
 fi
 
 "$APPLY" mango >/dev/null 2>&1 || true
