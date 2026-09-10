@@ -1,0 +1,81 @@
+{
+  "change_serial": 6,
+  "entries": [
+    {
+      "active": false,
+      "close_reason": "closed_by_call",
+      "event_serial": 3,
+      "notification": {
+        "actions": [
+          "default",
+          "Open",
+          "mail-mark-read",
+          "Mark as read",
+          "inline-reply",
+          "Reply"
+        ],
+        "app_name": "Telegram Desktop",
+        "body": "⏳ Working — 3 min — ⏳ waiting on gemini-3.8-flash-high — 150s with no output yet (provider may be slow or overloaded, or the model is think…",
+        "category": "im.received",
+        "desktop_entry": "org.telegram.desktop",
+        "expiry_wall_ms": 1788855745006,
+        "icon": null,
+        "id": 1,
+        "image_data": {
+          "bits_per_sample": 8,
+          "channels": 4,
+          "has_alpha": true,
+          "height": 64,
+          "image_file": "i_3b6435d1656d06242b4f111bf029fe1e.webp",
+          "row_stride": 256,
+          "width": 64
+        },
+        "origin": "external",
+        "received_wall_ms": 1788855739006,
+        "summary": "Morgan",
+        "timeout": 6000,
+        "urgency": "normal"
+      },
+      "seen": false
+    },
+    {
+      "active": false,
+      "close_reason": "closed_by_call",
+      "event_serial": 6,
+      "notification": {
+        "actions": [
+          "default",
+          "Open",
+          "mail-mark-read",
+          "Mark as read",
+          "inline-reply",
+          "Reply"
+        ],
+        "app_name": "Telegram Desktop",
+        "body": "⏳ Working — 3 min — ⏳ waiting on gemini-3.8-flash-high — 150s with no output yet (provider may be slow or overloaded, or the model is think…",
+        "category": "im.received",
+        "desktop_entry": "org.telegram.desktop",
+        "expiry_wall_ms": 1788856295743,
+        "icon": null,
+        "id": 2,
+        "image_data": {
+          "bits_per_sample": 8,
+          "channels": 4,
+          "has_alpha": true,
+          "height": 64,
+          "image_file": "i_3b6435d1656d06242b4f111bf029fe1e.webp",
+          "row_stride": 256,
+          "width": 64
+        },
+        "origin": "external",
+        "received_wall_ms": 1788856289743,
+        "summary": "Morgan",
+        "timeout": 6000,
+        "urgency": "normal"
+      },
+      "seen": false
+    }
+  ],
+  "next_id": 3,
+  "version": 2
+}

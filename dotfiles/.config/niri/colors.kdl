@@ -1,7 +1,32 @@
-// Generated automatically from Noctalia palette for Niri session
 layout {
+
+    focus-ring {
+        active-color   "#a3d578"
+        inactive-color "#091613"
+        urgent-color   "#ffb4ab"
+    }
+
     border {
-        active-color "#ffb4a8"
-        inactive-color "#45475a"
+        active-color   "#a3d578"
+        inactive-color "#091613"
+        urgent-color   "#ffb4ab"
+    }
+
+
+    tab-indicator {
+        active-color   "#a3d578"
+        inactive-color "#285000"
+        urgent-color   "#ffb4ab"
+    }
+
+    insert-hint {
+        color "#a3d57880"
+    }
+}
+
+recent-windows {
+    highlight {
+        active-color "#a3d578"
+        urgent-color "#ffb4ab"
     }
 }

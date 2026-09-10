@@ -125,7 +125,7 @@ if timeout 15 mango -c "$HOME/.config/mango/config.conf" -p \
    timeout 15 niri validate >> "$LOG_FILE" 2>&1 &&
    timeout 15 noctalia config validate >> "$LOG_FILE" 2>&1 &&
    ([ ! -f "$HOME/.config/sway/config" ] || ! command -v sway >/dev/null 2>&1 || \
-    timeout 15 sway -C -c "$HOME/.config/sway/config" >> "$LOG_FILE" 2>&1); then
+    WLR_BACKENDS=headless timeout 15 sway -C -c "$HOME/.config/sway/config" >> "$LOG_FILE" 2>&1); then
     show_ok
 else
     show_failed
@@ -199,7 +199,7 @@ mkdir -p "$SNAPSHOT_WORK/local-bin"
 for helper_name in \
     apply-theme-profile clean-stray-sessions niri-session-guarded \
     mango-session-guarded sway-session-guarded plasma-session-guarded \
-    save-noctalia-profile save-theme-profile \
+    save-noctalia-profile save-theme-profile sync-active-theme \
     noctalia-greeter-sync-smart mango-animation steam obs obs-safe \
     obs-fix-recording-paths slogout; do
     if [ -f "$HOME/.local/bin/$helper_name" ]; then

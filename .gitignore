@@ -20,3 +20,5 @@ result-*
 *.bak
 *.bak.*
 *.backup.*
+**/plugins/sources/
+**/plugins/sources/**

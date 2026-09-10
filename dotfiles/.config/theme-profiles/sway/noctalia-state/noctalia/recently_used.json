@@ -1,0 +1,6 @@
+{
+  "Applications": [
+    "/run/current-system/sw/share/applications/startcenter.desktop",
+    "/home/aesc/.nix-profile/share/applications/org.telegram.desktop.desktop"
+  ]
+}

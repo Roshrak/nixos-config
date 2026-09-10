@@ -1,9 +1,0 @@
-[Unit]
-Description=Watch Kitty Themes for Live Reload
-StartLimitIntervalSec=0
-
-[Path]
-PathModified=%h/.config/kitty/themes
-
-[Install]
-WantedBy=default.target

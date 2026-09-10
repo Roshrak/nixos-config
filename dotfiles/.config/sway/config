@@ -84,6 +84,7 @@ bindsym $mod+Shift+e exec noctalia msg panel-toggle session
 bindsym Print exec noctalia msg screenshot-region
 bindsym $mod+v exec noctalia msg panel-toggle clipboard
 bindsym Mod1+Tab exec noctalia msg window-switcher
+bindsym Mod1+z exec fcitx5-remote -t
 
 # Hardware and media keys through Noctalia / WirePlumber
 bindsym XF86AudioRaiseVolume exec wpctl set-volume @DEFAULT_SINK@ 5%+

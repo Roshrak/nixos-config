@@ -327,6 +327,10 @@ binds {
         spawn "noctalia" "msg" "window-switcher";
     }
 
+    Alt+Z {
+        spawn "fcitx5-remote" "-t";
+    }
+
 
     // ========================================================
     // SCREENSHOTS

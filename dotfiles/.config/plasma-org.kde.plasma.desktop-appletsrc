@@ -25,7 +25,7 @@ SlidePaths=/nix/store/0gj9qmpza3dasncn8iz34c7fc6w8hwjr-breeze-6.6.6/share/wallpa
 activityId=
 formfactor=2
 immutability=1
-lastScreen=1
+lastScreen=0
 location=3
 plugin=org.kde.panel
 wallpaperplugin=org.kde.image
@@ -149,6 +149,8 @@ plugin=org.kde.plasma.panelspacer
 AppletOrder=26;47;30;42
 
 [Containments][48]
+ItemGeometries-1920x1080=
+ItemGeometriesHorizontal=
 activityId=6e369b7e-aca0-46ce-9fba-fc7e8497ac16
 formfactor=0
 immutability=1

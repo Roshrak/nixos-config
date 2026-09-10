@@ -1,0 +1,18 @@
+[Unit]
+Description=Minecraft Auto Chat Responder for Roshrak (Morgan AI)
+After=network.target agy-bridge.service
+Wants=agy-bridge.service
+
+[Service]
+Type=simple
+ExecStart=/run/current-system/sw/bin/python3 /home/aesc/.local/bin/mc_chat_responder.py
+Restart=always
+RestartSec=3
+Environment="HOME=/home/aesc"
+Environment="PATH=/home/aesc/.local/bin:/home/aesc/.nix-profile/bin:/run/current-system/sw/bin:/usr/bin:/bin"
+Environment="WAYLAND_DISPLAY=wayland-1"
+Environment="DISPLAY=:0"
+Environment="XDG_RUNTIME_DIR=/run/user/1000"
+
+[Install]
+WantedBy=default.target

@@ -7,7 +7,7 @@ community_ids = []
 [theme.templates.user.kitty]
 input_path = "/run/current-system/sw/share/noctalia/assets/templates/kitty/kitty.conf"
 output_path = "/home/aesc/.config/kitty/profiles/sway/theme.conf"
-post_hook = "pkill -SIGUSR1 -u $(id -u) -x kitty"
+post_hook = "pkill -SIGUSR1 -u $(id -u) -x kitty || true"
 
 [theme.templates.user.gtk3]
 input_path = "/run/current-system/sw/share/noctalia/assets/templates/gtk/gtk3.css"
@@ -46,3 +46,24 @@ output_path = "/home/aesc/.local/state/theme-profiles/sway/generated/btop/noctal
 [theme.templates.user.cava]
 input_path = "/run/current-system/sw/share/noctalia/assets/templates/cava/cava.ini"
 output_path = "/home/aesc/.local/state/theme-profiles/sway/generated/cava/noctalia"
+
+[theme.templates.user.obs]
+input_path = "/home/aesc/.local/state/noctalia/community-templates/obs/matugen.obt"
+output_path = [
+  "/home/aesc/.local/state/theme-profiles/sway/generated/obs/matugen.obt",
+  "/home/aesc/.config/obs-studio/themes/matugen.obt"
+]
+
+[theme.templates.user.prismlauncher]
+input_path = "/home/aesc/.local/state/noctalia/community-templates/prismlauncher/prismlauncher.json"
+output_path = [
+  "/home/aesc/.local/state/theme-profiles/sway/generated/prismlauncher/theme.json",
+  "/home/aesc/.local/share/PrismLauncher/themes/Matugen/theme.json"
+]
+
+[theme.templates.user.obsidian]
+input_path = "/home/aesc/.local/state/noctalia/community-templates/obsidian/obsidian.css"
+output_path = [
+  "/home/aesc/.local/state/theme-profiles/sway/generated/obsidian/noctalia.css",
+  "/home/aesc/Documents/Obsidian Vault/.obsidian/snippets/noctalia.css"
+]
