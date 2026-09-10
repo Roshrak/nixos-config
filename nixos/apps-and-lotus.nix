@@ -5,6 +5,7 @@
     BROWSER = "chromium";
     XCURSOR_THEME = "Bibata-Modern-Ice";
     XCURSOR_SIZE = "24";
+    LV2_PATH = "/run/current-system/sw/lib/lv2";
   };
 
   environment.systemPackages = with pkgs; [
@@ -22,6 +23,13 @@
     bibata-cursors
     xdg-user-dirs
 
+    # Audio processing & DSP
+    easyeffects
+    lsp-plugins
+    calf
+    zam-plugins
+    mda_lv2
+
     # Minecraft
     prismlauncher
     jdk8
@@ -36,6 +44,7 @@
     })
     obsidian
     pkgs.libreoffice
+    telegram-desktop
 
     # Breeze cursor and the gsettings command
     glib

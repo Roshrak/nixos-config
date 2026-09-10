@@ -16,6 +16,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     }; 
     claude-code-nix.url = "github:sadjow/claude-code-nix";
+    llm-agents.url = "github:numtide/llm-agents.nix";
   };
 
   outputs = inputs@{ nixpkgs, mango, noctalia, ... }:
@@ -63,6 +64,7 @@
             inputs.lotus.nixosModules.fcitx5-lotus
             ./apps-and-lotus.nix
             ./claude-code.nix
+            ./llm-agents.nix
             ./desktop/plasma.nix      # KDE Plasma 6 second session
             ./desktop/niri.nix        # Niri third session
             ./desktop/sway.nix        # Sway + Noctalia v5 fourth session
@@ -79,9 +81,13 @@
     };
 
   nixConfig = {
-    extra-substituters = [ "https://noctalia.cachix.org" ];
+    extra-substituters = [
+      "https://noctalia.cachix.org"
+      "https://cache.numtide.com"
+    ];
     extra-trusted-public-keys = [
       "noctalia.cachix.org-1:pCOR47nnMEo5thcxNDtzWpOxNFQsBRglJzxWPp3dkU4="
+      "niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g="
     ];
   };
 }
