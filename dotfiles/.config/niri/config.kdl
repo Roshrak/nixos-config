@@ -140,14 +140,7 @@ gestures {
 // ============================================================
 
 overview {
-    // Keep the desktop wallpaper visible behind the workspace overview.
-    backdrop-color "transparent"
-}
-
-// Move Noctalia's wallpaper surface into the overview backdrop.
-layer-rule {
-    match namespace="^noctalia-wallpaper$"
-    place-within-backdrop true
+    backdrop-color "#000000"
 }
 
 
