@@ -25,6 +25,7 @@ let
 
   themeSessionCleanup = pkgs.writeShellScriptBin "theme-session-cleanup" ''
     set -uo pipefail
+    /run/current-system/sw/bin/systemctl --user stop niri.service 2>/dev/null || true
     /run/current-system/sw/bin/systemctl --user unset-environment \
       THEME_PROFILE \
       NOCTALIA_STATE_HOME \
@@ -228,6 +229,30 @@ QTEOF
       *) exit 0 ;;
     esac
 
+    # Debounce: coalesce rapid hook invocations (e.g. browsing wallpapers or multi-monitor events)
+    STAMP_DIR="''${XDG_RUNTIME_DIR:-/tmp}/theme-sync"
+    mkdir -p "$STAMP_DIR"
+    STAMP_FILE="$STAMP_DIR/req-$PROFILE"
+    LOCK_FILE="$STAMP_DIR/lock-$PROFILE"
+
+    date +%s%N > "$STAMP_FILE"
+
+    exec 9>"$LOCK_FILE"
+    if ! flock -n 9; then
+      # Another instance is already queued or processing, exit immediately
+      exit 0
+    fi
+
+    # Trailing debounce window: wait for rapid bursts to settle
+    while true; do
+      LAST_REQ="$(cat "$STAMP_FILE" 2>/dev/null || echo 0)"
+      sleep 0.35
+      CURRENT_REQ="$(cat "$STAMP_FILE" 2>/dev/null || echo 0)"
+      if [ "$LAST_REQ" = "$CURRENT_REQ" ]; then
+        break
+      fi
+    done
+
     /run/current-system/sw/bin/theme-profile-activate "$PROFILE"
 
     case "$PROFILE" in
@@ -323,6 +348,9 @@ QTEOF
       force_cleanup
     done
 
+    pkill -u "$UID_ME" -x sway 2>/dev/null || true
+    pkill -u "$UID_ME" -x mango 2>/dev/null || true
+
     /run/current-system/sw/bin/niri-session "$@"
     rc=$?
 
@@ -334,6 +362,11 @@ QTEOF
   swaySessionGuarded = pkgs.writeShellScriptBin "sway-session-guarded" ''
     set -u
     pkill -u "$(id -u)" -f '(\.noctalia-wrapped|/bin/noctalia)' >/dev/null 2>&1 || true
+
+    # Clean up leftover compositors from previous sessions
+    /run/current-system/sw/bin/systemctl --user stop niri.service 2>/dev/null || true
+    pkill -u "$(id -u)" -x niri 2>/dev/null || true
+    pkill -u "$(id -u)" -x mango 2>/dev/null || true
 
     export THEME_PROFILE="sway"
     export NOCTALIA_CONFIG_HOME="$HOME/.config/theme-profiles/sway/config-home"
@@ -360,6 +393,11 @@ QTEOF
     set -u
     pkill -u "$(id -u)" -f '(\.noctalia-wrapped|/bin/noctalia)' >/dev/null 2>&1 || true
 
+    # Clean up leftover compositors from previous sessions
+    /run/current-system/sw/bin/systemctl --user stop niri.service 2>/dev/null || true
+    pkill -u "$(id -u)" -x niri 2>/dev/null || true
+    pkill -u "$(id -u)" -x sway 2>/dev/null || true
+
     export THEME_PROFILE="mango"
     export NOCTALIA_CONFIG_HOME="$HOME/.config/theme-profiles/mango/config-home"
     export NOCTALIA_STATE_HOME="$HOME/.local/state/theme-profiles/mango"
@@ -384,6 +422,12 @@ QTEOF
   plasmaSessionGuarded = pkgs.writeShellScriptBin "plasma-session-guarded" ''
     set -u
     pkill -u "$(id -u)" -f '(\.noctalia-wrapped|/bin/noctalia)' >/dev/null 2>&1 || true
+
+    # Clean up leftover compositors from previous sessions
+    /run/current-system/sw/bin/systemctl --user stop niri.service 2>/dev/null || true
+    pkill -u "$(id -u)" -x niri 2>/dev/null || true
+    pkill -u "$(id -u)" -x sway 2>/dev/null || true
+    pkill -u "$(id -u)" -x mango 2>/dev/null || true
 
     export THEME_PROFILE="kde"
     export KITTY_CONFIG_DIRECTORY="$HOME/.config/kitty/profiles/kde"
