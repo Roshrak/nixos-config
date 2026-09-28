@@ -17,6 +17,9 @@
     }; 
     claude-code-nix.url = "github:sadjow/claude-code-nix";
     llm-agents.url = "github:numtide/llm-agents.nix";
+    # Keep the installed Antigravity CLI build while migrating it from the
+    # per-user profile; the current llm-agents input's CLI is a different version.
+    llm-agents-antigravity.url = "github:numtide/llm-agents.nix/e28ea84e78517e5d05ae0c399da00e848e207261";
   };
 
   outputs = inputs@{ nixpkgs, mango, noctalia, ... }:
@@ -68,6 +71,7 @@
             ./desktop/plasma.nix      # KDE Plasma 6 second session
             ./desktop/niri.nix        # Niri third session
             ./desktop/sway.nix        # Sway + Noctalia v5 fourth session
+            ./desktop/xfce.nix        # XFCE fallback session on native Xorg/X11
             ./desktop/theme-profiles.nix # Isolated theme profiles for Niri, Sway, Mango, KDE
             ./configuration.nix
             ({ ... }: {

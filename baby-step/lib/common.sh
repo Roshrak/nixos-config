@@ -100,13 +100,18 @@ fatal() {
 run_logged() {
     local description="$1"
     local status
+    local -a pipeline_status=()
     shift
 
-    printf '\n--- %s ---\n' "$description" >> "$LOG_FILE"
-    if "$@" >> "$LOG_FILE" 2>&1; then
+    printf '\n--- %s ---\n' "$description" | tee -a "$LOG_FILE"
+    if "$@" 2>&1 | tee -a "$LOG_FILE"; then
         return 0
     else
-        status=$?
+        pipeline_status=("${PIPESTATUS[@]}")
+        status="${pipeline_status[0]}"
+        if [ "$status" -eq 0 ]; then
+            status="${pipeline_status[1]}"
+        fi
     fi
 
     printf 'Command failed with exit code %s\n' "$status" >> "$LOG_FILE"

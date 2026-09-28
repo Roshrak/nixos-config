@@ -1,31 +1,64 @@
 MY COMPUTER SUMMARY
-Updated: 2026-09-02 ~21:18 +07:00
+Updated: 2026-09-28 20:19 (+07:00)
 
-No secrets in this file (no passwords, keys, tokens, Wi-Fi names, IPs).
-It does show my username, computer model, and GitHub repo name.
+This summary contains no passwords, keys, tokens, cookies, or Wi-Fi details.
 
 MACHINE
 
-Hostname: tonelico-nix    Flake name: tonelico  (NOT the same)
-Correct target: /etc/nixos#tonelico
-NixOS 26.05 (Yarara), Generation 71 (switched 2026-09-02).
-Acer Swift SFG16-72: Intel Core Ultra 5 125U, 15 GiB RAM, zram swap.
-Disk: 468 GiB NVMe, 104 GiB used, 341 GiB free (24% used). /boot: 968 MiB free.
-Login screen: Noctalia Greeter. Sessions: Mango+Noctalia, Plasma 6, Niri, Sway+Noctalia.
-Current session: Niri on Wayland.
+Hostname: tonelico-nix    Flake name: tonelico
+Correct NixOS target: /etc/nixos#tonelico
+NixOS 26.05.20260910.d58a46e (Yarara), kernel 7.2.4, x86_64.
+Acer Swift SFG16-72, Intel Core Ultra 5 125U, 15 GiB RAM.
+Root disk: 468 GiB total, 92 GiB used, 352 GiB free. /boot: 968 MiB free.
 
-HEALTH (checked 2026-09-02)
+CURRENT SYSTEM AND RECOVERY
 
-0 failed system checks. 0 failed services. Network, audio, Bluetooth: OK.
-Virtualization: VM 'win11' and all ISO files verified and protected.
+Active system generation: 116; previous: 115; named fallback: 114.
+Current system path: /nix/store/jv3mfc1hhsj4c7778ly1n4fpl4zsf4rk-nixos-system-tonelico-nix-26.05.20260910.d58a46e
+The boot default is generation 116. The named fallback profile/root and boot entry
+still point to generation 114, which is also the system that booted this session.
+/run/booted-system remains generation 114 until reboot. Generation 113 was pruned.
+Generation 116 is active now but has not yet had a reboot/cold-boot test.
 
-MAINTENANCE & CLEANUP (2026-09-02)
+SYSTEM PACKAGES AND NIX PROFILES
 
-- Performed safe Nix garbage collection: freed 3.2 GiB (1,383 dead store paths removed).
-- All maintenance scripts verified healthy and improved with single rolling backup retention.
-- Added Sway desktop validation and backup synchronization.
-- All 14 system health checks passed (100% OK).
-- Git configuration backup synchronized and pushed to GitHub main branch.
+VLC 3.0.23 is installed as a NixOS system package. Its Nix closure includes FFmpeg,
+libva, and VLC plugins; Intel iHD VA-API is working (H.264/HEVC/VP9 profiles listed).
+Antigravity CLI (agy 1.2.12) and OpenCode (1.18.30) are system packages too.
+The active Nix user profile is empty; its old package/history generations were removed.
+
+CURRENT DESKTOP
+
+Niri on Wayland. Available sessions: Mango, Niri, Sway, KDE Plasma, and XFCE.
+Latest observed environment: XDG_CURRENT_DESKTOP=niri; DESKTOP_SESSION was empty.
+
+HEALTH AND CLEANUP (checked 2026-09-28)
+
+No failed system or user units were listed; greetd is active. The idle libvirtd
+process is stopped while its sockets remain active for on-demand virtualization.
+The latest Nix GC removed 117 unreferenced store paths and freed 1.7 GiB; the
+earlier audit cleanup removed 14,197 paths and about 17.5 GiB. Active Nix cache is
+712 KiB; 112 MiB of regenerated Git/tarball/fetch metadata was removed. Only those
+verified Nix cache items were deleted; no other Trash entries were touched.
+No Downloads, VM/ISO assets, or general application caches were cleaned. Root
+now has 352 GiB free.
+Memory snapshot: 15 GiB total, 2.5 GiB used, 12 GiB available; zram swap unused.
+
+UPDATE SCRIPT CHECK
+
+update-and-push.sh --check-only passes. It displays the one local commit ahead of
+origin/main (1dcf6c8), asks for CONTINUE before starting an update, and retains its
+later PUSH confirmation before commit/push. No update, commit, or push was run.
+Detailed audit reports/logs remain local in ~/baby-step; the backup snapshot sends
+selected summaries/tools only.
+
+OPEN / DEFERRED CHECKS
+
+- Generation 116 has not yet been reboot/cold-boot tested; the running session
+  remains booted from generation 114.
+- Portal Screenshot/ScreenCast/Secret response tests remain deferred.
+- Earlier audit follow-ups for microphone audibility/exit status and USB4/ACPI/NVMe
+  diagnostics are documented in ~/baby-step/reports/nixos-five-desktop-audit-report-2026-09-27.md.
 
 WHAT I USUALLY RUN
 
@@ -35,19 +68,11 @@ Update + GitHub:  ~/baby-step/update-and-push.sh
 Rebuild only:     ~/baby-step/rebuild-system.sh
 Local snapshot:   ~/baby-step/backup-config.sh
 
-SAFE TESTS (no update, switch, commit, or push)
-
-~/baby-step/check-system.sh                 -> expect: 0 failed checks
-~/baby-step/update-system.sh --check-only   -> expect: SUCCESS
-~/baby-step/backup-config.sh --check-only   -> expect: SUCCESS
-~/baby-step/update-and-push.sh --check-only -> expect: SUCCESS
-
 IF SOMETHING FAILS
 
-Build failed -> old system still running, nothing broken.
-New system broke but terminal works: sudo nixos-rebuild switch --rollback
-Cannot reach login: reboot, choose older generation in boot menu.
-Anything else: stop, copy the ERROR, ask an AI. Logs: ~/baby-step/logs
+If the new active configuration fails, use the boot menu to select Generation 115
+or the named fallback (Generation 114).
+Logs and audit records: ~/baby-step/logs and ~/baby-step/reports
 
-FOR AN AI: show it this file first. If it needs more:
-~/baby-step/system-summary-for-ai.md and ~/baby-step/system-audit.md
+FOR AN AI: start with this file, then read
+~/baby-step/system-summary-for-ai.md and ~/baby-step/system-audit.md.

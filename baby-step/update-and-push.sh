@@ -7,13 +7,18 @@ SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 . "$SCRIPT_DIR/lib/common.sh"
 
 check_only=0
+resume_backup=0
 case "${1:-}" in
     "") ;;
     --check-only) check_only=1 ;;
+    --resume-backup) resume_backup=1 ;;
     -h|--help)
         printf 'Safely update NixOS, snapshot configuration, commit, and push.\n'
         printf 'Run: %s\n' "$HOME/baby-step/update-and-push.sh"
         printf 'Safety checks only: %s --check-only\n' "$HOME/baby-step/update-and-push.sh"
+        printf 'Resume backup after a successful update: %s --resume-backup\n' \
+            "$HOME/baby-step/update-and-push.sh"
+        printf 'Use --resume-backup only when the previous run completed the system update.\n'
         exit 0
         ;;
     *)
@@ -32,6 +37,8 @@ acquire_maintenance_lock
 TOTAL=8
 
 printf 'Preparing a safe update and GitHub backup.\n\n'
+printf 'Live progress will be shown below; full output is also saved to:\n  %s\n\n' \
+    "$LOG_FILE"
 
 show_step 1 "$TOTAL" "Checking Git identity, branch, and remote"
 if ! require_commands git nix jq rg awk; then
@@ -82,8 +89,9 @@ esac
 show_ok
 
 show_step 2 "$TOTAL" "Checking the NixOS flake and backup sources"
+printf '\n  Backup-source checks:\n'
 if detect_flake_target && "$SCRIPT_DIR/backup-config.sh" --check-only \
-       >> "$LOG_FILE" 2>&1; then
+       2>&1 | tee -a "$LOG_FILE"; then
     show_ok
     printf '  Using: %s\n' "$FLAKE_TARGET"
 else
@@ -108,8 +116,23 @@ if run_logged "Git fetch" git -C "$BACKUP_REPO" fetch --quiet origin main; then
         fatal "GitHub has newer commits. Stop and ask for help before updating."
     fi
     if [ "$local_ahead" -ne 0 ]; then
-        show_failed
-        fatal "Local unpushed commits need review before this tool can continue."
+        printf '\nLocal commits not yet on origin/main (%s):\n' "$local_ahead"
+        git -C "$BACKUP_REPO" log --oneline --decorate origin/main..HEAD
+        printf '\nTheir committed diff summary:\n'
+        git -C "$BACKUP_REPO" diff --stat origin/main..HEAD
+        if [ "$check_only" -eq 0 ]; then
+            if [ "$resume_backup" -eq 1 ]; then
+                printf '\nReview these commits before continuing to the backup review.\n'
+            else
+                printf '\nReview these commits before continuing the system update.\n'
+            fi
+            printf 'Type CONTINUE to proceed, or press Enter to stop: '
+            read -r ahead_confirmation
+            if [ "$ahead_confirmation" != "CONTINUE" ]; then
+                show_failed
+                fatal "Stopped safely because local commits were not approved."
+            fi
+        fi
     fi
     printf 'Local commits ahead of origin: %s\n' "$local_ahead" >> "$LOG_FILE"
     show_ok
@@ -139,15 +162,22 @@ if [ "$check_only" -eq 1 ]; then
 fi
 
 show_step 4 "$TOTAL" "Updating and verifying the computer"
-if "$SCRIPT_DIR/update-system.sh" >> "$LOG_FILE" 2>&1; then
-    show_ok
+if [ "$resume_backup" -eq 1 ]; then
+    printf '\n  Resume mode: retaining the already-updated system; no NixOS rebuild will run.\n'
+    printf 'SKIPPED (resume-backup)\n'
 else
-    show_failed
-    fatal "System update failed. Nothing will be committed or pushed."
+    printf '\n  System-update details:\n'
+    if "$SCRIPT_DIR/update-system.sh" 2>&1 | tee -a "$LOG_FILE"; then
+        show_ok
+    else
+        show_failed
+        fatal "System update failed. Nothing will be committed or pushed."
+    fi
 fi
 
 show_step 5 "$TOTAL" "Snapshotting important configuration"
-if "$SCRIPT_DIR/backup-config.sh" >> "$LOG_FILE" 2>&1; then
+printf '\n  Configuration-snapshot details:\n'
+if "$SCRIPT_DIR/backup-config.sh" 2>&1 | tee -a "$LOG_FILE"; then
     show_ok
 else
     show_failed

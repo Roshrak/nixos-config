@@ -6,7 +6,7 @@ Wants=agy-bridge.service
 [Service]
 Type=simple
 ExecStart=/run/current-system/sw/bin/python3 /home/aesc/.local/bin/mc_chat_responder.py
-Restart=always
+Restart=on-failure
 RestartSec=3
 Environment="HOME=/home/aesc"
 Environment="PATH=/home/aesc/.local/bin:/home/aesc/.nix-profile/bin:/run/current-system/sw/bin:/usr/bin:/bin"

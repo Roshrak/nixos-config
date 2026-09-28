@@ -1,7 +1,7 @@
 [Default Applications]
 text/html=chromium-browser.desktop
-x-scheme-handler/http=chromium-browser.desktop
-x-scheme-handler/https=chromium-browser.desktop
+x-scheme-handler/http=xfce4-web-browser.desktop
+x-scheme-handler/https=xfce4-web-browser.desktop
 inode/directory=org.gnome.Nautilus.desktop
 x-scheme-handler/claude-cli=claude-code-url-handler.desktop
 x-scheme-handler/tg=org.telegram.desktop.desktop
@@ -10,3 +10,5 @@ x-scheme-handler/tonsite=org.telegram.desktop.desktop
 [Added Associations]
 x-scheme-handler/tg=org.telegram.desktop.desktop;
 x-scheme-handler/tonsite=org.telegram.desktop.desktop;
+x-scheme-handler/http=xfce4-web-browser.desktop;
+x-scheme-handler/https=xfce4-web-browser.desktop;

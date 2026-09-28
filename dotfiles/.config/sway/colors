@@ -1,7 +1,7 @@
-set $primary            #50d8ec
-set $on_primary         #00363d
-set $secondary          #82d3e1
-set $tertiary           #a7c8ff
+set $primary            #50d7ed
+set $on_primary         #00363e
+set $secondary          #82d3e2
+set $tertiary           #a8c8ff
 set $error              #ffb4ab
 set $surface            #0f141c
 set $on_surface         #dee2ef

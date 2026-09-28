@@ -26,12 +26,79 @@ let
   themeSessionCleanup = pkgs.writeShellScriptBin "theme-session-cleanup" ''
     set -uo pipefail
     /run/current-system/sw/bin/systemctl --user stop niri.service 2>/dev/null || true
+    # Stop compositor-bound portal processes before clearing their inherited
+    # display environment; they will be activated again by the next session.
+    /run/current-system/sw/bin/systemctl --user stop \
+      xdg-desktop-portal.service \
+      xdg-desktop-portal-gtk.service \
+      xdg-desktop-portal-wlr.service \
+      xdg-desktop-portal-gnome.service \
+      xdg-desktop-portal-xapp.service \
+      plasma-xdg-desktop-portal-kde.service \
+      xfce4-notifyd.service 2>/dev/null || true
     /run/current-system/sw/bin/systemctl --user unset-environment \
       THEME_PROFILE \
       NOCTALIA_STATE_HOME \
       NOCTALIA_CONFIG_HOME \
       KITTY_CONFIG_DIRECTORY \
-      QT_QPA_PLATFORMTHEME 2>/dev/null || true
+      QT_QPA_PLATFORMTHEME \
+      XDG_CURRENT_DESKTOP \
+      XDG_SESSION_DESKTOP \
+      XDG_SESSION_TYPE \
+      WAYLAND_DISPLAY \
+      NIRI_SOCKET \
+      SWAYSOCK \
+      DISPLAY \
+      XAUTHORITY 2>/dev/null || true
+  '';
+
+  # Plasma launches KWin, Xwayland, Powerdevil, KDED and Plasmashell as
+  # systemd --user units.  greetd/logind only owns the small launcher process
+  # in the login scope, so killing that scope during logout does not by itself
+  # stop Plasma's user units.  Explicitly retire the graphical-session target
+  # and wait for KWin/Xwayland to release DRM and display :0 before another
+  # desktop is allowed to start.
+  plasmaSessionCleanup = pkgs.writeShellScriptBin "plasma-session-cleanup" ''
+    set -uo pipefail
+
+    SYSTEMCTL=/run/current-system/sw/bin/systemctl
+    PGREP=/run/current-system/sw/bin/pgrep
+    PKILL=/run/current-system/sw/bin/pkill
+    UID_ME="$(${pkgs.coreutils}/bin/id -u)"
+
+    "$SYSTEMCTL" --user --no-block stop \
+      plasma-workspace-wayland.target \
+      plasma-workspace.target \
+      graphical-session.target 2>/dev/null || true
+
+    plasma_gone() {
+      ! "$PGREP" -u "$UID_ME" -x kwin_wayland >/dev/null 2>&1 \
+        && ! "$PGREP" -u "$UID_ME" -x Xwayland >/dev/null 2>&1
+    }
+
+    attempt=0
+    while ! plasma_gone && [ "$attempt" -lt 50 ]; do
+      ${pkgs.coreutils}/bin/sleep 0.1
+      attempt=$((attempt + 1))
+    done
+
+    if ! plasma_gone; then
+      "$SYSTEMCTL" --user kill --kill-whom=all --signal=TERM \
+        plasma-kwin_wayland.service 2>/dev/null || true
+      "$PKILL" -TERM -u "$UID_ME" -x kwin_wayland 2>/dev/null || true
+      "$PKILL" -TERM -u "$UID_ME" -x Xwayland 2>/dev/null || true
+
+      attempt=0
+      while ! plasma_gone && [ "$attempt" -lt 30 ]; do
+        ${pkgs.coreutils}/bin/sleep 0.1
+        attempt=$((attempt + 1))
+      done
+    fi
+
+    if ! plasma_gone; then
+      echo "plasma-session-cleanup: KWin/Xwayland did not stop" >&2
+      exit 1
+    fi
   '';
 
   themeProfileActivate = pkgs.writeShellScriptBin "theme-profile-activate" ''
@@ -103,11 +170,37 @@ KEOF
         atomic_copy "$CONFIG_ROOT/$PROFILE/gtk-$v/settings.ini" "$gtk_dir/settings.ini"
       fi
 
+      # Password fields and search boxes use GTK's error bell independently
+      # from desktop event sounds. Reassert these after every theme-profile
+      # copy so switching desktops can never restore an audible bell.
+      for key in \
+        gtk-error-bell \
+        gtk-enable-event-sounds \
+        gtk-enable-input-feedback-sounds; do
+        if grep -q "^$key=" "$gtk_dir/settings.ini"; then
+          ${pkgs.gnused}/bin/sed -i "s/^$key=.*/$key=false/" "$gtk_dir/settings.ini"
+        else
+          printf '%s=false\n' "$key" >> "$gtk_dir/settings.ini"
+        fi
+      done
+
       gtk_css="$gtk_dir/gtk.css"
       if [ ! -f "$gtk_css" ] || ! grep -q "theme-active.css" "$gtk_css"; then
         printf "@import 'colors.css';\n@import 'theme-active.css';\n" > "$gtk_css"
       fi
     done
+
+    # Plasma and KDE applications keep a separate bell preference. This also
+    # covers KScreenLocker and survives later theme/profile activation.
+    ${pkgs.kdePackages.kconfig}/bin/kwriteconfig6 \
+      --file "$HOME/.config/kdeglobals" \
+      --group General --key UseSystemBell false
+    ${pkgs.kdePackages.kconfig}/bin/kwriteconfig6 \
+      --file "$HOME/.config/kaccessrc" \
+      --group Bell --key SystemBell false
+    ${pkgs.kdePackages.kconfig}/bin/kwriteconfig6 \
+      --file "$HOME/.config/kaccessrc" \
+      --group Bell --key ArtsBell false
 
     if [ "$PROFILE" != "kde" ]; then
       if [ -f "$STATE_ROOT/$PROFILE/generated/gtk3/noctalia.css" ]; then
@@ -435,6 +528,7 @@ QTEOF
     /run/current-system/sw/bin/theme-profile-activate kde >/dev/null 2>&1 || true
 
     on_exit() {
+      /run/current-system/sw/bin/plasma-session-cleanup >/dev/null 2>&1 || true
       /run/current-system/sw/bin/theme-session-cleanup >/dev/null 2>&1 || true
     }
     trap on_exit EXIT TERM INT HUP
@@ -461,6 +555,7 @@ in
     themeProfileActivate
     themeProfileSync
     themeSessionCleanup
+    plasmaSessionCleanup
     niriSessionGuarded
     swaySessionGuarded
     mangoSessionGuarded

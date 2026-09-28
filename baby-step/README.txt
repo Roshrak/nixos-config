@@ -18,6 +18,13 @@ DETAILED SUMMARY FOR AN AI
 Give the AI this file:
 ~/baby-step/system-summary-for-ai.md
 
+AUDIT AND SYSTEM REVIEW RECORDS
+Current full system snapshot:
+~/baby-step/system-audit.md
+
+Five-desktop audit and remediation records:
+~/baby-step/reports
+
 INSTALL OR MOVE TO ANOTHER COMPUTER
 Read this guide first:
 ~/nixos-config/docs/MIGRATION-INSTALL.md

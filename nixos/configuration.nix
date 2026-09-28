@@ -31,6 +31,9 @@
   };
   boot.loader.efi.canTouchEfiVariables = true;
   boot.kernelPackages = pkgs.linuxPackages_latest;
+  # Never expose the physical PC-speaker bell. Desktop/media audio continues
+  # through PipeWire; these modules are only for legacy console beeps.
+  boot.blacklistedKernelModules = [ "pcspkr" "snd_pcsp" ];
 
   networking.networkmanager.enable = true;
   networking.firewall.enable = true;
@@ -51,7 +54,7 @@
   programs.mango.enable = true;
   services.displayManager.sddm.enable = false;
 
-programs.noctalia-greeter = {
+services.displayManager.noctalia-greeter = {
   enable = true;
 
   settings = {
@@ -63,6 +66,9 @@ programs.noctalia-greeter = {
     };
 
     output = {
+      # Keep the login UI on the laptop panel. Noctalia disables other KMS
+      # connectors only for the greeter and restores them for the user session.
+      name = "eDP-1";
       layout = "eDP-1:0,0; HDMI-A-1:1920,60";
     };
 
@@ -75,6 +81,13 @@ programs.noctalia-greeter = {
   services.udev.extraRules = ''
     # RDMCTMZT 36b0:3002 — prevent fake gamepad detection.
     SUBSYSTEM=="input", KERNEL=="event*", ATTRS{idVendor}=="36b0", ATTRS{idProduct}=="3002", ENV{ID_INPUT_JOYSTICK}=="1", ENV{ID_INPUT_JOYSTICK}=""
+    # RDMCTMZT WAVE 75 36b0:3009 — its System Control endpoint is a
+    # keyboard control interface, but input_id incorrectly tags it as a gamepad.
+    SUBSYSTEM=="input", KERNEL=="event*", ATTRS{idVendor}=="36b0", ATTRS{idProduct}=="3009", ENV{ID_INPUT_JOYSTICK}=="1", ENV{ID_INPUT_JOYSTICK}=""
+    # ATK X1 SE 373b:1107 — expose the pointer only. Its composite USB
+    # receiver also advertises keyboard/consumer-control event nodes; when the
+    # unstable receiver reconnects, those nodes can corrupt keyboard state.
+    SUBSYSTEM=="input", KERNEL=="event*", ATTRS{idVendor}=="373b", ATTRS{idProduct}=="1107", ENV{ID_INPUT_MOUSE}!="1", ENV{LIBINPUT_IGNORE_DEVICE}="1"
     KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="36b0", ATTRS{idProduct}=="3009", MODE="0660", GROUP="users", TAG+="uaccess"
   '';
 
@@ -129,6 +142,54 @@ programs.noctalia-greeter = {
   services.gnome.gnome-keyring.enable = true;
   services.accounts-daemon.enable = true;
   programs.dconf.enable = true;
+  # Disable audible UI/error feedback for every desktop using the shared
+  # GNOME settings schemas. Lock these keys so an application cannot silently
+  # turn the empty-field/error bell back on.
+  programs.dconf.profiles.user.databases = [
+    {
+      settings = {
+        "org/gnome/desktop/sound" = {
+          "event-sounds" = false;
+          "input-feedback-sounds" = false;
+        };
+        "org/gnome/desktop/wm/preferences" = {
+          "audible-bell" = false;
+        };
+      };
+      locks = [
+        "/org/gnome/desktop/sound/event-sounds"
+        "/org/gnome/desktop/sound/input-feedback-sounds"
+        "/org/gnome/desktop/wm/preferences/audible-bell"
+      ];
+    }
+  ];
+
+  # GTK's error bell is separate from its event-sound preferences. These
+  # defaults cover GTK lock/password dialogs and file/application launchers.
+  environment.etc."xdg/gtk-3.0/settings.ini".text = ''
+    [Settings]
+    gtk-error-bell=false
+    gtk-enable-event-sounds=false
+    gtk-enable-input-feedback-sounds=false
+  '';
+  environment.etc."xdg/gtk-4.0/settings.ini".text = ''
+    [Settings]
+    gtk-error-bell=false
+    gtk-enable-event-sounds=false
+    gtk-enable-input-feedback-sounds=false
+  '';
+
+  # KDE/Plasma has its own system-bell and accessibility-bell switches.
+  environment.etc."xdg/kdeglobals".text = ''
+    [General]
+    UseSystemBell=false
+  '';
+  environment.etc."xdg/kaccessrc".text = ''
+    [Bell]
+    ArtsBell=false
+    SystemBell=false
+    VisibleBell=false
+  '';
 
   # Vietnamese input with Fcitx5 + Unikey. XDG autostart above starts it in Mango.
   i18n.inputMethod = {
@@ -169,6 +230,8 @@ programs.noctalia-greeter = {
     gnome-disk-utility
     gparted
     mpv
+    # VLC supplies its codec and plugin runtime dependencies from Nixpkgs.
+    vlc
 
     # Desktop controls and Wayland tools
     pavucontrol
