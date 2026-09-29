@@ -16,10 +16,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
     }; 
     claude-code-nix.url = "github:sadjow/claude-code-nix";
-    llm-agents.url = "github:numtide/llm-agents.nix";
-    # Keep the installed Antigravity CLI build while migrating it from the
-    # per-user profile; the current llm-agents input's CLI is a different version.
-    llm-agents-antigravity.url = "github:numtide/llm-agents.nix/e28ea84e78517e5d05ae0c399da00e848e207261";
+    # Match the newer AGY and OpenCode builds already installed in the user
+    # profile while moving them into the NixOS system profile.
+    llm-agents.url = "github:numtide/llm-agents.nix/a621acfa43a25731694a8ef64fcbd5a00241e085";
+    # Hermes CLI and Telegram gateway, pinned to the current upstream release.
+    hermes-agent.url = "tarball+https://codeload.github.com/NousResearch/hermes-agent/tar.gz/refs/tags/v2026.9.24";
   };
 
   outputs = inputs@{ nixpkgs, mango, noctalia, ... }:
