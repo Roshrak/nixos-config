@@ -14,7 +14,7 @@ seat * xcursor_theme Bibata-Modern-Ice 24
 swaybg_command -
 
 # Output configuration: External HDMI-A-1 is on the LEFT (pos 0 0), Built-in eDP-1 is on the RIGHT (pos 1920 0)
-output HDMI-A-1 pos 0 0 res 1920x1080
+output HDMI-A-1 pos 0 60 res 1920x1080
 output eDP-1 pos 1920 0 res 1920x1200
 
 # Primary workspaces mapped to built-in laptop panel (eDP-1)
@@ -68,7 +68,7 @@ exec --no-startup-id dbus-update-activation-environment --systemd WAYLAND_DISPLA
 exec --no-startup-id systemctl --user restart xdg-desktop-portal-wlr xdg-desktop-portal
 exec --no-startup-id /home/aesc/.local/bin/clean-stray-sessions
 exec --no-startup-id /run/current-system/sw/bin/theme-profile-activate sway
-exec --no-startup-id lxqt-policykit-agent
+exec --no-startup-id kanshi --config /etc/kanshi/sway.conf
 exec --no-startup-id /run/current-system/sw/bin/noctalia-profile sway
 exec --no-startup-id fcitx5 -d
 
@@ -164,4 +164,3 @@ bindsym $mod+r reload
 bindsym $mod+Shift+c reload
 bindsym $mod+Shift+r restart
 bindsym $mod+Shift+Mod1+m exit
-

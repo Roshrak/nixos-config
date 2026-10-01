@@ -87,7 +87,7 @@ docs/           documentation and historical plans
 | Flake inputs and host discovery | `nixos/flake.nix`, `flake.lock` | Yes | Pins inputs and discovers complete host directories automatically. |
 | General NixOS configuration | `nixos/configuration.nix` | Yes | Networking, audio, shared graphics defaults, desktop foundations, packages, and services. |
 | Shared application modules | `nixos/*.nix` | Usually | Fcitx5 Lotus, Claude Code, fonts, optional keyboard and VM modules. |
-| Desktop modules | `nixos/desktop/` | Yes | Plasma, Niri, greetd/Noctalia integration, portals, and session handling. |
+| Desktop modules | `nixos/desktop/` | Yes | Mango, Niri, Sway, Hyprland, Plasma, GNOME, XFCE, greetd/Noctalia integration, portals, and session handling. |
 | Selected user configuration | `dotfiles/` | Yes, for user `aesc` | Mango, Niri, Noctalia, Kitty, Neovim, Fcitx5, themes, and helpers. |
 | Maintenance tools | `baby-step/` | Yes | Health, update, backup, rebuild, and Git workflows. |
 | Host metadata | `nixos/hosts/NAME/host.nix` | No | Hostname, architecture, primary-user deployment metadata, and optional modules. |

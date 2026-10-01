@@ -10,6 +10,9 @@ LOG_DIR="$BABY_STEP_DIR/logs"
 STATE_DIR="$BABY_STEP_DIR/state"
 BACKUP_DIR="$BABY_STEP_DIR/backups"
 
+# shellcheck source=lib/source-manifest.sh
+. "$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/source-manifest.sh"
+
 LOG_FILE=""
 FLAKE_ATTR=""
 FLAKE_TARGET=""
@@ -187,6 +190,78 @@ current_generation() {
     nixos-rebuild list-generations --json 2>/dev/null |
         jq -r '.[] | select(.current == true) | .generation' |
         head -n 1
+}
+
+configuration_source_digest() {
+    local digest
+
+    [ -d "$NIXOS_DIR" ] || return 1
+    digest="$(
+        set -o pipefail
+        nixos_source_manifest "$NIXOS_DIR" |
+            (cd "$NIXOS_DIR" && xargs -0 -r sha256sum) |
+            sha256sum | awk '{print $1}'
+    )" || return 1
+    [[ "$digest" =~ ^[[:xdigit:]]{64}$ ]] || return 1
+    printf '%s\n' "$digest"
+}
+
+receipt_value() {
+    local receipt="$1"
+    local key="$2"
+    awk -F= -v key="$key" '$1 == key { count++; value = substr($0, index($0, "=") + 1) }
+        END { if (count == 1) print value; else exit 1 }' "$receipt"
+}
+
+write_update_receipt() {
+    local run_id="$1"
+    local health="$2"
+    local path="$STATE_DIR/update-success-receipt.txt"
+    local temporary active generation lock_digest source_digest
+
+    [[ "$run_id" =~ ^[A-Za-z0-9._-]{1,100}$ ]] || return 1
+    case "$health" in passed|warning) ;; *) return 1 ;; esac
+    active="$(readlink -f /run/current-system 2>/dev/null)" || return 1
+    generation="$(current_generation)" || return 1
+    [[ "$generation" =~ ^[0-9]+$ ]] || return 1
+    lock_digest="$(sha256sum "$NIXOS_DIR/flake.lock" | awk '{print $1}')" || return 1
+    source_digest="$(configuration_source_digest)" || return 1
+    [[ "$lock_digest" =~ ^[[:xdigit:]]{64}$ ]] || return 1
+
+    ensure_baby_dirs || return 1
+    temporary="$(mktemp "$STATE_DIR/.update-success-receipt.XXXXXX")" || return 1
+    if ! {
+        printf 'schema=2\nrun_id=%s\nactive_system=%s\ngeneration=%s\n' \
+            "$run_id" "$active" "$generation"
+        printf 'flake_lock_sha256=%s\nnixos_source_sha256=%s\nhealth=%s\n' \
+            "$lock_digest" "$source_digest" "$health"
+        printf 'recorded_at=%s\n' "$(date --iso-8601=seconds)"
+    } > "$temporary" || ! chmod 600 "$temporary" || ! mv -f -- "$temporary" "$path"; then
+        rm -f -- "$temporary"
+        return 1
+    fi
+}
+
+validate_update_receipt() {
+    local expected_run_id="$1"
+    local receipt="$STATE_DIR/update-success-receipt.txt"
+    local active generation lock_digest source_digest health
+
+    [ -f "$receipt" ] && [ ! -L "$receipt" ] || return 1
+    [ "$(stat -c '%u:%a' "$receipt" 2>/dev/null)" = "$(id -u):600" ] || return 1
+    [ "$(receipt_value "$receipt" schema 2>/dev/null)" = 2 ] || return 1
+    [ "$(receipt_value "$receipt" run_id 2>/dev/null)" = "$expected_run_id" ] || return 1
+    active="$(readlink -f /run/current-system 2>/dev/null)" || return 1
+    generation="$(current_generation)" || return 1
+    lock_digest="$(sha256sum "$NIXOS_DIR/flake.lock" 2>/dev/null | awk '{print $1}')" || return 1
+    source_digest="$(configuration_source_digest)" || return 1
+    health="$(receipt_value "$receipt" health 2>/dev/null)" || return 1
+    case "$health" in passed|warning) ;; *) return 1 ;; esac
+
+    [ "$(receipt_value "$receipt" active_system 2>/dev/null)" = "$active" ] &&
+        [ "$(receipt_value "$receipt" generation 2>/dev/null)" = "$generation" ] &&
+        [ "$(receipt_value "$receipt" flake_lock_sha256 2>/dev/null)" = "$lock_digest" ] &&
+        [ "$(receipt_value "$receipt" nixos_source_sha256 2>/dev/null)" = "$source_digest" ]
 }
 
 marker_value() {

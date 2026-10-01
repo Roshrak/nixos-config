@@ -22,3 +22,24 @@ result-*
 *.backup.*
 **/plugins/sources/
 **/plugins/sources/**
+
+# Private maintenance state is kept locally, never published.
+/baby-step/logs/
+/baby-step/state/
+/baby-step/backups/
+/baby-step/full-audit-*/
+
+# The custom-service manifest allows this helper's code only.
+/dotfiles/.hermes/*
+!/dotfiles/.hermes/agy_bridge.py
+
+# Generated Noctalia runtime data; retain declarative settings/templates.
+/dotfiles/.config/theme-profiles/**/clipboard
+/dotfiles/.config/theme-profiles/**/clipboard/**
+/dotfiles/.config/noctalia/**/clipboard
+/dotfiles/.config/noctalia/**/clipboard/**
+/dotfiles/.config/**/.catalog/
+/dotfiles/.config/**/.noctalia-cache.json
+/dotfiles/.config/**/.setup-complete
+/dotfiles/.config/fcitx5/conf/cached_layouts
+*.giant-backup-*

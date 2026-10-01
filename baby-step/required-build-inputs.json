@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "common": [
+    "flake.nix",
+    "flake.lock",
+    "configuration.nix",
+    "desktop/gnome-window-rules/extension.js",
+    "desktop/gnome-window-rules/metadata.json",
+    "desktop/gnome-window-rules/schemas/org.gnome.shell.extensions.tonelico-window-rules.gschema.xml",
+    "desktop/hyprland/hyprland.lua",
+    "fonts/comic-mono/ComicMono.ttf",
+    "fonts/comic-mono/ComicMono-Bold.ttf"
+  ],
+  "hosts": {
+    "tonelico": [
+      "hosts/tonelico/host.nix",
+      "hosts/tonelico/default.nix",
+      "hosts/tonelico/hardware-configuration.nix"
+    ]
+  }
+}

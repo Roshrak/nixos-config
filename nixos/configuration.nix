@@ -69,7 +69,7 @@ services.displayManager.noctalia-greeter = {
       # Keep the login UI on the laptop panel. Noctalia disables other KMS
       # connectors only for the greeter and restores them for the user session.
       name = "eDP-1";
-      layout = "eDP-1:0,0; HDMI-A-1:1920,60";
+      layout = "HDMI-A-1:0,60; eDP-1:1920,0";
     };
 
     keyboard.layout = "us";

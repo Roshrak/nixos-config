@@ -29,12 +29,14 @@ fi
 
 start_log "update"
 acquire_maintenance_lock
-TOTAL=8
+TOTAL=9
 BUILD_WORK=""
 lock_backup=""
 lock_updated=0
 lock_existed=0
 activation_attempted=0
+fallback_before=""
+update_run_id="${MAINTENANCE_RUN_ID:-$(date +%s)-$$}"
 
 cleanup() {
     local status=$?
@@ -90,7 +92,7 @@ printf 'Starting a safe system update.\n\n'
 show_step 1 "$TOTAL" "Checking commands, disk space, and flake target"
 free_kib="$(df -Pk / | awk 'NR == 2 { print $4 }')"
 boot_free_kib="$(df -Pk /boot | awk 'NR == 2 { print $4 }')"
-if require_commands nix jq hostname df nixos-rebuild systemctl sudo timeout &&
+if require_commands nix jq hostname df nixos-rebuild systemctl sudo timeout bootctl readlink sha256sum sort xargs &&
     [ "$free_kib" -ge 5242880 ] &&
     [ "$boot_free_kib" -ge 262144 ] &&
     detect_flake_target; then
@@ -166,8 +168,8 @@ BUILD_WORK="$(mktemp -d "$STATE_DIR/update-build.XXXXXX")"
 show_step 5 "$TOTAL" "Building the updated system"
 if (
     cd "$BUILD_WORK" || exit 1
-    nixos-rebuild build --flake "$FLAKE_TARGET"
-) >> "$LOG_FILE" 2>&1; then
+    run_logged "NixOS build" nixos-rebuild build --flake "$FLAKE_TARGET"
+); then
     built_system="$(readlink -f "$BUILD_WORK/result" 2>/dev/null || true)"
     show_ok
     record_success build "$FLAKE_TARGET -> ${built_system:-build completed}"
@@ -182,7 +184,34 @@ else
     fatal "The build failed. Your running NixOS generation is unchanged."
 fi
 
-show_step 6 "$TOTAL" "Activating the successfully built system"
+fallback_profile="/nix/var/nix/profiles/system-profiles/fallback"
+fallback_before="$(readlink -f "$fallback_profile" 2>> "$LOG_FILE" || true)"
+if [ -z "$fallback_before" ] || [ ! -x "$fallback_before/init" ]; then
+    show_failed
+    write_maintenance_state "System update" \
+        "Named fallback could not be verified before activation" \
+        "Flake update, evaluation, candidate build, fallback preflight" \
+        "No system activation was attempted" \
+        "Restore/verify the named fallback before updating; see $LOG_FILE"
+    fatal "The named fallback system is unavailable. The new system was not activated."
+fi
+printf 'Fallback system before activation: %s\n' "$fallback_before" >> "$LOG_FILE"
+
+show_step 6 "$TOTAL" "Running the dry activation preflight"
+if run_logged "NixOS dry activation" sudo nixos-rebuild dry-activate --flake "$FLAKE_TARGET"; then
+    show_ok
+else
+    show_failed
+    if ! restore_lock; then
+        fatal "Dry activation failed, and the previous flake.lock could not be restored."
+    fi
+    write_maintenance_state "System update" "Dry activation failed; running system unchanged" \
+        "Flake update, evaluation, candidate build, fallback check, dry activation" \
+        "flake.lock restored when possible" "See $LOG_FILE"
+    fatal "Dry activation failed; the new system was not switched."
+fi
+
+show_step 7 "$TOTAL" "Activating the successfully built system"
 activation_attempted=1
 if run_logged "NixOS switch" sudo nixos-rebuild switch --flake "$FLAKE_TARGET"; then
     active_system="$(readlink -f /run/current-system)"
@@ -195,7 +224,34 @@ if run_logged "NixOS switch" sudo nixos-rebuild switch --flake "$FLAKE_TARGET"; 
             "Stop and inspect $LOG_FILE"
         fatal "The active system does not match the validated build. Nothing will be pushed."
     fi
+
+    current_gen="$(current_generation || true)"
+    fallback_system="$(readlink -f "$fallback_profile" 2>> "$LOG_FILE" || true)"
+    expected_boot_id="nixos-generation-${current_gen}.conf"
+    if [[ ! "$current_gen" =~ ^[0-9]+$ ]] ||
+       [ -z "$fallback_system" ] ||
+       [ "$fallback_system" != "$fallback_before" ] ||
+       [ "$fallback_system" = "$active_system" ] ||
+       [ ! -x "$fallback_system/init" ] ||
+       ! boot_entries="$(sudo -n bootctl list --json=short 2>> "$LOG_FILE")" ||
+       ! jq -e --arg id "$expected_boot_id" --arg init "init=$active_system/init" \
+           'any(.[]; .id == $id and .isDefault == true and ((.options // "") | contains($init)))' \
+           <<< "$boot_entries" >/dev/null ||
+       ! jq -e --arg init "init=$fallback_system/init" \
+           'any(.[]; ((.options // "") | contains($init)))' \
+           <<< "$boot_entries" >/dev/null; then
+        show_failed
+        write_maintenance_state "System update" \
+            "System switched, but boot default/fallback verification failed" \
+            "Flake update, evaluation, build, switch, active artifact, boot entry inspection" \
+            "$active_system is active; boot profile was not independently verified" \
+            "Keep the current and fallback generations; inspect $LOG_FILE before rebooting"
+        fatal "System switched, but the newest generation is not verified as boot default with the named fallback available."
+    fi
+
     show_ok
+    printf '  Boot default: %s (generation %s)\n' "$expected_boot_id" "$current_gen"
+    printf '  Named fallback remains unchanged and bootable: %s\n' "$fallback_system"
     record_success switch "$FLAKE_TARGET -> $active_system"
 else
     show_failed
@@ -205,7 +261,7 @@ else
     fatal "The build succeeded, but activation failed. Do not retry randomly."
 fi
 
-show_step 7 "$TOTAL" "Updating safe non-Nix items"
+show_step 8 "$TOTAL" "Updating safe non-Nix items"
 non_nix_warning=0
 if command -v flatpak >/dev/null 2>&1; then
     run_logged "Flatpak update" timeout 900 flatpak update -y || non_nix_warning=1
@@ -221,7 +277,7 @@ else
     show_warning
 fi
 
-show_step 8 "$TOTAL" "Running the final health check"
+show_step 9 "$TOTAL" "Running the final health check"
 health_status=0
 "$SCRIPT_DIR/check-system.sh" >> "$LOG_FILE" 2>&1 || health_status=$?
 case "$health_status" in
@@ -243,6 +299,21 @@ case "$health_status" in
         fatal "The system switched, but an important final health check failed. Nothing will be pushed."
         ;;
 esac
+
+receipt_health=passed
+if [ "$health_status" -eq 1 ]; then
+    receipt_health=warning
+fi
+if ! write_update_receipt "$update_run_id" "$receipt_health"; then
+    show_failed
+    write_maintenance_state "System update" \
+        "System switched and health check completed, but the success receipt could not be verified" \
+        "Flake update, evaluation, build, switch, boot/fallback validation, health check" \
+        "The active generation remains switched; backup resume is disabled" \
+        "Inspect $LOG_FILE and current state before proceeding"
+    fatal "Could not record a trustworthy update receipt. No backup/push should proceed."
+fi
+printf 'Verified update receipt recorded for run %s.\n' "$update_run_id" >> "$LOG_FILE"
 
 write_maintenance_state "System update" "Update, build, and switch succeeded" \
     "Flake update, evaluation, build, switch, non-Nix updates, health check" \

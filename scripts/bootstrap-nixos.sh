@@ -12,6 +12,8 @@ SCRIPT_NAME="$(basename -- "$0")"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd -P)"
 NIXOS_SOURCE="$REPO_ROOT/nixos"
+# shellcheck source=scripts/lib/custom-service-restore.sh
+. "$SCRIPT_DIR/lib/custom-service-restore.sh"
 
 HOST_KEY=""
 HOSTNAME_REQUESTED=""
@@ -209,7 +211,8 @@ done
 
 for command_name in \
     bash basename cat chown cmp cp date diff dirname find grep hostname \
-    install mkdir mktemp mv nix realpath rm sed uname; do
+    install mkdir mktemp mv nix readlink realpath rm rmdir sed sha256sum stat \
+    tar tee awk uname; do
     command -v "$command_name" >/dev/null 2>&1 ||
         fail "Required command is missing: $command_name"
 done
@@ -382,6 +385,40 @@ case "$HOST_GID" in
     ""|*[!0-9]*) fail "Invalid numeric user GID in host metadata: $HOST_GID" ;;
 esac
 
+if [ "$TARGET_ROOT" = "/" ]; then
+    BACKUP_BASE="$TARGET_HOME/baby-step/backups/bootstrap-$STAMP"
+else
+    BACKUP_BASE="$TARGET_ROOT/var/backups/nixos-bootstrap/$STAMP"
+fi
+custom_restore_validate_new_private_directory "$BACKUP_BASE" \
+    "$HOST_UID" "$HOST_GID" ||
+    fail "Private recovery location failed preflight: $BACKUP_BASE"
+
+if [ "$DEPLOY_USER_CONFIG" -eq 1 ]; then
+    if [ -z "$WORK_DIR" ]; then
+        WORK_DIR="$(mktemp -d /tmp/nixos-bootstrap.XXXXXX)" ||
+            fail "Could not create private selected-user preflight storage"
+        chmod 0700 "$WORK_DIR" || fail "Could not secure selected-user preflight storage"
+    fi
+    CUSTOM_RESTORE_PREFLIGHT_DIR="$WORK_DIR/selected-user-lists"
+    mkdir -m 0700 "$CUSTOM_RESTORE_PREFLIGHT_DIR" ||
+        fail "Could not create selected-user entry-list storage"
+    CUSTOM_RESTORE_CHECK_REPOSITORY="$COPY_REPOSITORY"
+    preflight_selected_user_configuration "$REPO_ROOT" "$TARGET_HOME" \
+        "$BACKUP_BASE" "$HOST_UID" "$HOST_GID" \
+        "$REPO_ROOT/baby-step/custom-service-manifest.tsv" ||
+        fail "Selected-user sources, destinations, or recovery paths failed preflight"
+else
+    say "Custom-service file restore preflight skipped by --no-user-config."
+fi
+
+if [ "$COPY_REPOSITORY" -eq 1 ]; then
+    custom_restore_preflight_repository_copy "$REPO_ROOT" "$TARGET_HOME" \
+        "$TARGET_HOME/nixos-config" "$BACKUP_BASE/user/nixos-config" \
+        "$HOST_UID" "$HOST_GID" ||
+        fail "Repository copy source, destination, or recovery path failed preflight"
+fi
+
 if [ -n "$HARDWARE_REQUESTED" ]; then
     HARDWARE_SOURCE="$(realpath -m -- "$HARDWARE_REQUESTED")"
 elif [ -f "$TARGET_NIXOS/hardware-configuration.nix" ]; then
@@ -401,7 +438,11 @@ BOOTSTRAP_HARDWARE_FILE="$HARDWARE_SOURCE" nix eval --raw --impure --expr '
   in if builtins.isFunction value then "valid" else throw "hardware file is not a Nix module"
 ' >/dev/null || fail "Hardware configuration is not a valid Nix module: $HARDWARE_SOURCE"
 
-WORK_DIR="$(mktemp -d /tmp/nixos-bootstrap.XXXXXX)"
+if [ -z "$WORK_DIR" ]; then
+    WORK_DIR="$(mktemp -d /tmp/nixos-bootstrap.XXXXXX)" ||
+        fail "Could not create private bootstrap work storage"
+    chmod 0700 "$WORK_DIR" || fail "Could not secure bootstrap work storage"
+fi
 CANDIDATE="$WORK_DIR/candidate"
 mkdir -p "$CANDIDATE"
 cp -a "$NIXOS_SOURCE/." "$CANDIDATE/"
@@ -482,12 +523,6 @@ if [ "$ASSUME_YES" -ne 1 ]; then
     [ "$confirmation" = "DEPLOY" ] || fail "Stopped safely; nothing was deployed"
 fi
 
-if [ "$TARGET_ROOT" = "/" ]; then
-    BACKUP_BASE="$HOME/baby-step/backups/bootstrap-$STAMP"
-else
-    BACKUP_BASE="$TARGET_ROOT/var/backups/nixos-bootstrap/$STAMP"
-fi
-
 if [ "${EUID:-$(id -u)}" -eq 0 ]; then
     ROOT_COMMAND=( )
 elif [ -d "$TARGET_ROOT" ] && [ -w "$TARGET_ROOT" ]; then
@@ -501,7 +536,18 @@ run_root() {
     "${ROOT_COMMAND[@]}" "$@"
 }
 
-run_root install -d -m 0755 "$BACKUP_BASE"
+BACKUP_PARENT_UID="$HOST_UID"
+BACKUP_PARENT_GID="$HOST_GID"
+if [ "$TARGET_ROOT" != "/" ] && \
+   { [ "${EUID:-$(id -u)}" -eq 0 ] || [ "${#ROOT_COMMAND[@]}" -gt 0 ]; }; then
+    BACKUP_PARENT_UID=0
+    BACKUP_PARENT_GID=0
+fi
+custom_restore_ensure_directory "$BACKUP_BASE" "$HOST_UID" "$HOST_GID" \
+    0700 "$BACKUP_PARENT_UID" "$BACKUP_PARENT_GID" 0755 ||
+    fail "Could not create the private recovery location: $BACKUP_BASE"
+custom_restore_validate_private_directory "$BACKUP_BASE" "$HOST_UID" "$HOST_GID" ||
+    fail "Created recovery location did not retain private metadata: $BACKUP_BASE"
 
 sync_repository_host_file() {
     local candidate_file="$1"
@@ -609,59 +655,11 @@ if [ "$DEPLOYED_HOSTNAME" != "$HOST_NAME" ]; then
 fi
 say "[4/7] Validating the deployed flake... OK"
 
-backup_and_replace_entry() {
-    local source_entry="$1"
-    local destination_entry="$2"
-    local backup_entry="$3"
-
-    if [ -e "$destination_entry" ] && diff -qr "$source_entry" "$destination_entry" >/dev/null 2>&1; then
-        return 0
-    fi
-
-    run_root install -d -m 0755 "$(dirname -- "$destination_entry")"
-    if [ -e "$destination_entry" ] || [ -L "$destination_entry" ]; then
-        run_root install -d -m 0755 "$(dirname -- "$backup_entry")"
-        run_root mv "$destination_entry" "$backup_entry"
-    fi
-    run_root cp -a "$source_entry" "$destination_entry"
-    run_root chown -R "$HOST_UID:$HOST_GID" "$destination_entry"
-}
-
-deploy_directory_entries() {
-    local source_directory="$1"
-    local destination_directory="$2"
-    local backup_directory="$3"
-    local source_entry
-    local name
-
-    [ -d "$source_directory" ] || return 0
-    run_root install -d -m 0755 "$destination_directory"
-    run_root chown "$HOST_UID:$HOST_GID" "$destination_directory"
-    while IFS= read -r -d '' source_entry; do
-        name="$(basename -- "$source_entry")"
-        backup_and_replace_entry "$source_entry" \
-            "$destination_directory/$name" "$backup_directory/$name"
-    done < <(find "$source_directory" -mindepth 1 -maxdepth 1 -print0)
-}
-
 say "[5/7] Deploying selected user configuration..."
 if [ "$DEPLOY_USER_CONFIG" -eq 1 ]; then
-    run_root install -d -m 0755 "$TARGET_HOME"
-    run_root chown "$HOST_UID:$HOST_GID" "$TARGET_HOME"
-    deploy_directory_entries "$REPO_ROOT/dotfiles/.config" \
-        "$TARGET_HOME/.config" "$BACKUP_BASE/user/.config"
-    deploy_directory_entries "$REPO_ROOT/dotfiles/.local/bin" \
-        "$TARGET_HOME/.local/bin" "$BACKUP_BASE/user/.local/bin"
-    deploy_directory_entries "$REPO_ROOT/dotfiles/.local/share/applications" \
-        "$TARGET_HOME/.local/share/applications" \
-        "$BACKUP_BASE/user/.local/share/applications"
-    deploy_directory_entries "$REPO_ROOT/baby-step" \
-        "$TARGET_HOME/baby-step" "$BACKUP_BASE/user/baby-step"
-    run_root install -d -m 0755 \
-        "$TARGET_HOME/baby-step/logs" \
-        "$TARGET_HOME/baby-step/state" \
-        "$TARGET_HOME/baby-step/backups"
-    run_root chown -R "$HOST_UID:$HOST_GID" "$TARGET_HOME/baby-step"
+    deploy_selected_user_configuration "$REPO_ROOT" "$TARGET_HOME" \
+        "$BACKUP_BASE" "$HOST_UID" "$HOST_GID" \
+        "$REPO_ROOT/baby-step/custom-service-manifest.tsv"
     say "[5/7] Deploying selected user configuration... OK"
 else
     say "[5/7] Deploying selected user configuration... SKIPPED"
@@ -671,7 +669,7 @@ say "[6/7] Preserving the cloned repository on the target..."
 TARGET_REPOSITORY="$TARGET_HOME/nixos-config"
 if [ "$COPY_REPOSITORY" -eq 1 ] && [ "$TARGET_ROOT" != "/" ]; then
     backup_and_replace_entry "$REPO_ROOT" "$TARGET_REPOSITORY" \
-        "$BACKUP_BASE/user/nixos-config"
+        "$BACKUP_BASE/user/nixos-config" "$HOST_UID" "$HOST_GID"
     say "[6/7] Preserving the cloned repository on the target... OK"
 elif [ "$COPY_REPOSITORY" -eq 1 ] && \
      [ "$(realpath -m -- "$REPO_ROOT")" = "$(realpath -m -- "$TARGET_REPOSITORY")" ]; then

@@ -8,15 +8,20 @@ SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 
 check_only=0
 resume_backup=0
+backup_only=0
+[ "$#" -le 1 ] || { printf 'ERROR: Use one option at a time.\n' >&2; exit 2; }
 case "${1:-}" in
     "") ;;
     --check-only) check_only=1 ;;
     --resume-backup) resume_backup=1 ;;
+    --backup-only) backup_only=1 ;;
     -h|--help)
         printf 'Safely update NixOS, snapshot configuration, commit, and push.\n'
         printf 'Run: %s\n' "$HOME/baby-step/update-and-push.sh"
         printf 'Safety checks only: %s --check-only\n' "$HOME/baby-step/update-and-push.sh"
         printf 'Resume backup after a successful update: %s --resume-backup\n' \
+            "$HOME/baby-step/update-and-push.sh"
+        printf 'Publish the already-active configuration without updates: %s --backup-only\n' \
             "$HOME/baby-step/update-and-push.sh"
         printf 'Use --resume-backup only when the previous run completed the system update.\n'
         exit 0
@@ -41,7 +46,7 @@ printf 'Live progress will be shown below; full output is also saved to:\n  %s\n
     "$LOG_FILE"
 
 show_step 1 "$TOTAL" "Checking Git identity, branch, and remote"
-if ! require_commands git nix jq rg awk; then
+if ! require_commands git nix jq rg awk python3; then
     show_failed
     fatal "Git or Nix is missing"
 fi
@@ -86,6 +91,15 @@ case "$remote_push_url" in
         fatal "The origin push destination is not the expected GitHub backup repository"
         ;;
 esac
+if [ "$check_only" -eq 0 ]; then
+    git -C "$BACKUP_REPO" diff --cached --quiet
+    staged_status=$?
+    case "$staged_status" in
+        0) ;;
+        1) fatal "Existing staged work needs its own review; it was not overwritten and no update was started" ;;
+        *) fatal "Could not verify the existing Git index" ;;
+    esac
+fi
 show_ok
 
 show_step 2 "$TOTAL" "Checking the NixOS flake and backup sources"
@@ -100,7 +114,11 @@ else
 fi
 
 show_step 3 "$TOTAL" "Checking for remote Git changes"
-if run_logged "Git fetch" git -C "$BACKUP_REPO" fetch --quiet origin main; then
+if [ "$check_only" -eq 1 ]; then
+    printf 'Remote fetch skipped in check-only mode.\n'
+    printf 'Remote ahead/behind status was not refreshed.\n' >> "$LOG_FILE"
+    show_warning
+elif run_logged "Git fetch" git -C "$BACKUP_REPO" fetch --quiet origin main; then
     if ! ahead_behind="$(git -C "$BACKUP_REPO" rev-list --left-right --count \
             HEAD...origin/main 2>> "$LOG_FILE")"; then
         show_failed
@@ -146,7 +164,7 @@ for required_path in nixos baby-step dotfiles scripts; do
         fatal "Required repository path is missing: $required_path"
 done
 if ! git -C "$BACKUP_REPO" add --dry-run -A -- \
-    nixos baby-step dotfiles scripts >> "$LOG_FILE" 2>&1; then
+    nixos baby-step dotfiles scripts docs README.md .gitignore >> "$LOG_FILE" 2>&1; then
     fatal "Repository staging paths could not be validated"
 fi
 
@@ -161,14 +179,55 @@ if [ "$check_only" -eq 1 ]; then
     exit 0
 fi
 
-show_step 4 "$TOTAL" "Updating and verifying the computer"
-if [ "$resume_backup" -eq 1 ]; then
-    printf '\n  Resume mode: retaining the already-updated system; no NixOS rebuild will run.\n'
-    printf 'SKIPPED (resume-backup)\n'
+show_step 4 "$TOTAL" "Verifying the computer before publication"
+if [ "$backup_only" -eq 1 ]; then
+    source_system="$(nix eval --offline --no-write-lock-file --raw \
+        "${FLAKE_TARGET%#*}#nixosConfigurations.$FLAKE_ATTR.config.system.build.toplevel.outPath" \
+        2>> "$LOG_FILE")" || fatal "Could not evaluate the configuration selected for publication"
+    active_system="$(readlink -f /run/current-system)" || fatal "Could not identify the active system"
+    [ "$source_system" = "$active_system" ] ||
+        fatal "The declared configuration differs from the active system; build and activate it before --backup-only"
+    "$SCRIPT_DIR/check-system.sh" 2>&1 | tee -a "$LOG_FILE"
+    health_status=${PIPESTATUS[0]}
+    case "$health_status" in
+        0) show_ok ;;
+        1) show_warning ;;
+        *) fatal "Health checks could not complete; nothing will be published" ;;
+    esac
+    printf 'BACKUP ONLY: active system matches declared configuration; inputs were not updated.\n'
+elif [ "$resume_backup" -eq 1 ]; then
+    pending_run="$STATE_DIR/pending-update-run.txt"
+    if [ ! -f "$pending_run" ] || [ -L "$pending_run" ] ||
+       [ "$(stat -c '%u:%a' "$pending_run" 2>/dev/null)" != "$(id -u):600" ]; then
+        show_failed
+        fatal "No private update-run receipt exists; backup resume is not verified"
+    fi
+    IFS= read -r update_run_id < "$pending_run" || update_run_id=""
+    if ! validate_update_receipt "$update_run_id"; then
+        show_failed
+        fatal "The previous system update cannot be verified against the active generation and current configuration"
+    fi
+    printf '\n  Verified completed update run: %s\n' "$update_run_id"
+    printf '  Active generation and configuration hashes match its health receipt.\n'
+    printf 'BACKUP ONLY (no rebuild in this invocation)\n'
 else
+    update_run_id="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+    pending_run="$STATE_DIR/pending-update-run.txt"
+    pending_tmp="$(mktemp "$STATE_DIR/.pending-update-run.XXXXXX")" ||
+        fatal "Could not prepare the update-run receipt"
+    if ! printf '%s\n' "$update_run_id" > "$pending_tmp" ||
+       ! chmod 600 "$pending_tmp" || ! mv -f -- "$pending_tmp" "$pending_run"; then
+        rm -f -- "$pending_tmp"
+        fatal "Could not save the update-run receipt"
+    fi
     printf '\n  System-update details:\n'
-    if "$SCRIPT_DIR/update-system.sh" 2>&1 | tee -a "$LOG_FILE"; then
-        show_ok
+    if MAINTENANCE_RUN_ID="$update_run_id" "$SCRIPT_DIR/update-system.sh" 2>&1 | tee -a "$LOG_FILE"; then
+        if validate_update_receipt "$update_run_id"; then
+            show_ok
+        else
+            show_failed
+            fatal "The update returned success without a matching verified receipt"
+        fi
     else
         show_failed
         fatal "System update failed. Nothing will be committed or pushed."
@@ -186,33 +245,9 @@ fi
 
 show_step 6 "$TOTAL" "Staging and inspecting safe repository paths"
 if ! git -C "$BACKUP_REPO" add -A -- \
-    nixos baby-step dotfiles scripts >> "$LOG_FILE" 2>&1; then
+    nixos baby-step dotfiles scripts docs README.md .gitignore >> "$LOG_FILE" 2>&1; then
     show_failed
     fatal "Could not stage the configuration snapshot"
-fi
-
-unexpected_path=0
-if ! staged_paths="$(git -C "$BACKUP_REPO" diff --cached --name-only \
-        2>> "$LOG_FILE")"; then
-    show_failed
-    fatal "Could not inspect staged paths. Nothing was committed or pushed."
-fi
-while IFS= read -r staged_path; do
-    [ -n "$staged_path" ] || continue
-    case "$staged_path" in
-        nixos/*|baby-step/*|dotfiles/.config/*|dotfiles/.local/bin/*|\
-        dotfiles/.local/share/applications/*|dotfiles/.local/share/desktop-look-toggle/*|\
-        scripts/*)
-            ;;
-        *)
-            printf 'Unexpected staged path: %s\n' "$staged_path" >> "$LOG_FILE"
-            unexpected_path=1
-            ;;
-    esac
-done <<< "$staged_paths"
-if [ "$unexpected_path" -ne 0 ]; then
-    show_failed
-    fatal "An unexpected file is staged. Nothing was committed or pushed."
 fi
 
 if ! git -C "$BACKUP_REPO" diff --cached --check >> "$LOG_FILE" 2>&1; then
@@ -220,32 +255,10 @@ if ! git -C "$BACKUP_REPO" diff --cached --check >> "$LOG_FILE" 2>&1; then
     fatal "Staged files contain Git whitespace errors. Nothing was committed or pushed."
 fi
 
-secret_name=0
-while IFS= read -r staged_path; do
-    [ -n "$staged_path" ] || continue
-    case "$staged_path" in
-        */id_rsa|*/id_ed25519|*/credentials|*/credentials.*|*/.env|*/.env.*|\
-        */id_ecdsa|*/.netrc|*/auth.json|*.key|*.pem|*.p12|*.pfx)
-            secret_name=1
-            ;;
-    esac
-done <<< "$staged_paths"
-if [ "$secret_name" -ne 0 ]; then
+if ! python3 "$SCRIPT_DIR/lib/publication-check.py" --repo "$BACKUP_REPO" \
+        2>&1 | tee -a "$LOG_FILE"; then
     show_failed
-    fatal "A secret-like filename is staged. Its contents were not displayed."
-fi
-
-git -C "$BACKUP_REPO" diff --cached -U0 --no-ext-diff | rg -i \
-   "^\\+[^+].*(access[_-]?token[[:space:]]*=|refresh[_-]?token[[:space:]]*=|api[_-]?key[[:space:]]*=|client[_-]?secret[[:space:]]*=|BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|password[[:space:]]*=[[:space:]]*[\\\"'][^\\\"']{4,})" \
-   >/dev/null
-scan_status=("${PIPESTATUS[@]}")
-if [ "${scan_status[0]}" -ne 0 ] || [ "${scan_status[1]}" -gt 1 ]; then
-    show_failed
-    fatal "The staged-secret scan could not run reliably. Nothing was committed or pushed."
-fi
-if [ "${scan_status[1]}" -eq 0 ]; then
-    show_failed
-    fatal "Possible secret content is staged. Its value was not displayed."
+    fatal "The staged publication tree failed path/content checks. Nothing was committed or pushed."
 fi
 
 staged_tree="$(git -C "$BACKUP_REPO" write-tree 2>> "$LOG_FILE")" || {
@@ -304,9 +317,23 @@ else
 fi
 
 record_success git-backup "$BACKUP_REPO -> origin/main at $local_head"
-write_maintenance_state "Update and GitHub backup" "Update, snapshot, commit, and push succeeded" \
-    "System update, health check, snapshot, secret check, commit, verified push" \
-    "NixOS generation, configuration repository, GitHub origin/main" "None"
+if [ "$backup_only" -eq 0 ] && [ -f "$STATE_DIR/pending-update-run.txt" ] && [ ! -L "$STATE_DIR/pending-update-run.txt" ]; then
+    rm -f -- "$STATE_DIR/pending-update-run.txt"
+fi
+if [ "$backup_only" -eq 1 ]; then
+    write_maintenance_state "GitHub backup" "Active configuration snapshot and verified push succeeded" \
+        "Active/source equality, health check, snapshot, publication scan, commit, verified push" \
+        "Configuration repository and GitHub origin/main; no system update" "None"
+else
+    write_maintenance_state "Update and GitHub backup" "Update, snapshot, commit, and push succeeded" \
+        "System update, health check, snapshot, publication scan, commit, verified push" \
+        "NixOS generation, configuration repository, GitHub origin/main" "None"
+fi
 
-printf '\nSUCCESS: The computer was updated and the configuration was saved to GitHub.\n'
+if [ "$backup_only" -eq 1 ]; then
+    printf '\nSUCCESS: The active configuration was saved to GitHub; no inputs or packages were updated.\n'
+else
+    printf '\nSUCCESS: The computer was updated and the configuration was saved to GitHub.\n'
+fi
+printf 'Automated checks do not replace interactive smoke tests in each desktop session.\n'
 printf 'Detailed log: %s\n' "$LOG_FILE"

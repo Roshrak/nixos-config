@@ -72,7 +72,14 @@
             ./desktop/plasma.nix      # KDE Plasma 6 second session
             ./desktop/niri.nix        # Niri third session
             ./desktop/sway.nix        # Sway + Noctalia v5 fourth session
+            ./desktop/monitor-layout.nix # Main display and hotplug placement policies
             ./desktop/xfce.nix        # XFCE fallback session on native Xorg/X11
+            ./desktop/xfwm4-fix.nix   # External-compositor guard for XFWM4 4.20.0
+            ./desktop/hyprland.nix    # Plain Hyprland, no UWSM
+            ./desktop/gnome.nix       # Optional GNOME Wayland session under greetd
+            ./desktop/portals.nix     # Per-session portal routing
+            ./desktop/session-lifecycle.nix # Per-session environment bridge
+            ./desktop/session-catalog.nix # Curated greetd/Noctalia session entries
             ./desktop/theme-profiles.nix # Isolated theme profiles for Niri, Sway, Mango, KDE
             ./configuration.nix
             ({ ... }: {

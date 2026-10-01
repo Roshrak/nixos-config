@@ -1,0 +1,8 @@
+# source-home-relative<TAB>backup-dotfiles-relative<TAB>kind
+# Code only. Authentication state, .env files, logs, caches, and generated
+# Hermes environments are excluded. The systemd unit files are included by
+# the selected .config/systemd snapshot and are checked against live sources.
+.hermes/agy_bridge.py	.hermes/agy_bridge.py	code
+.local/bin/mc_chat_responder.py	.local/bin/mc_chat_responder.py	code
+.config/systemd/user/agy-bridge.service	.config/systemd/user/agy-bridge.service	unit
+.config/systemd/user/mc-chat-responder.service	.config/systemd/user/mc-chat-responder.service	unit

@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Require Noctalia to be the sole Hyprland notification owner.
+set -euo pipefail
+
+for attempt in {1..40}; do
+    status="$(busctl --user status org.freedesktop.Notifications 2>/dev/null || true)"
+    case "$status" in
+        *"Comm=.noctalia-wrapp"*) exit 0 ;;
+    esac
+
+    owner_exe="$(printf '%s\n' "$status" | sed -n 's/^Exe=//p' | head -n 1)"
+    owner_unit="$(printf '%s\n' "$status" | sed -n 's/^UserUnit=//p' | head -n 1)"
+    if [ "$attempt" -eq 1 ] || [ "$((attempt % 10))" -eq 0 ]; then
+        printf 'Waiting for Noctalia notification ownership (%s/40); current owner: %s (%s)\n' \
+            "$attempt" "${owner_exe:-none}" "${owner_unit:-none}" >&2
+    fi
+    sleep 0.25
+done
+
+status="$(busctl --user status org.freedesktop.Notifications 2>/dev/null || true)"
+case "$status" in
+    *"Comm=.noctalia-wrapp"*) exit 0 ;;
+esac
+printf 'ERROR: Noctalia did not acquire org.freedesktop.Notifications within 10 seconds; owner: %s (%s)\n' \
+    "${owner_exe:-none}" "${owner_unit:-none}" >&2
+exit 1

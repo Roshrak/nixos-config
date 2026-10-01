@@ -5,9 +5,9 @@ let
     set -euo pipefail
     profile="''${1:-''${THEME_PROFILE:-}}"
     case "$profile" in
-      niri|sway|mango) ;;
+      niri|sway|mango|hyprland) ;;
       *)
-        echo "Usage: noctalia-profile <niri|sway|mango>" >&2
+        echo "Usage: noctalia-profile <niri|sway|mango|hyprland>" >&2
         exit 2
         ;;
     esac
@@ -26,6 +26,7 @@ let
   themeSessionCleanup = pkgs.writeShellScriptBin "theme-session-cleanup" ''
     set -uo pipefail
     /run/current-system/sw/bin/systemctl --user stop niri.service 2>/dev/null || true
+    /run/current-system/sw/bin/systemctl --user stop geoclue-agent.service 2>/dev/null || true
     # Stop compositor-bound portal processes before clearing their inherited
     # display environment; they will be activated again by the next session.
     /run/current-system/sw/bin/systemctl --user stop \
@@ -34,6 +35,7 @@ let
       xdg-desktop-portal-wlr.service \
       xdg-desktop-portal-gnome.service \
       xdg-desktop-portal-xapp.service \
+      xdg-desktop-portal-hyprland.service \
       plasma-xdg-desktop-portal-kde.service \
       xfce4-notifyd.service 2>/dev/null || true
     /run/current-system/sw/bin/systemctl --user unset-environment \
@@ -42,61 +44,98 @@ let
       NOCTALIA_CONFIG_HOME \
       KITTY_CONFIG_DIRECTORY \
       QT_QPA_PLATFORMTHEME \
+      DESKTOP_SESSION \
       XDG_CURRENT_DESKTOP \
       XDG_SESSION_DESKTOP \
       XDG_SESSION_TYPE \
       WAYLAND_DISPLAY \
       NIRI_SOCKET \
       SWAYSOCK \
+      MANGO_INSTANCE_SIGNATURE \
+      HYPRLAND_INSTANCE_SIGNATURE \
+      KDE_FULL_SESSION \
+      KDE_SESSION_VERSION \
+      KDE_SESSION_UID \
+      KDE_SESSION_VT \
+      KDE_APPLICATIONS_AS_SCOPE \
+      GNOME_DESKTOP_SESSION_ID \
+      GNOME_SETUP_DISPLAY \
+      MATE_DESKTOP_SESSION_ID \
+      CINNAMON_VERSION \
+      LXQT_SESSION_CONFIG \
+      LXQT_SESSION_ID \
+      AWESOME_CONF \
+      NIX_GSETTINGS_OVERRIDES_DIR \
       DISPLAY \
-      XAUTHORITY 2>/dev/null || true
+      XAUTHORITY \
+      TONELICO_XAPP_PORTAL \
+      TONELICO_X11_WINDOW_PLACEMENT 2>/dev/null || true
+    # This D-Bus helper cannot remove entries (--unset is unsupported). Set
+    # the old session values to empty in the D-Bus activation environment;
+    # the next session imports its actual values. Do not pass --systemd here:
+    # systemd's stale values were removed by unset-environment above.
+    /run/current-system/sw/bin/dbus-update-activation-environment \
+      THEME_PROFILE= \
+      NOCTALIA_STATE_HOME= \
+      NOCTALIA_CONFIG_HOME= \
+      KITTY_CONFIG_DIRECTORY= \
+      QT_QPA_PLATFORMTHEME= \
+      DESKTOP_SESSION= \
+      XDG_CURRENT_DESKTOP= \
+      XDG_SESSION_DESKTOP= \
+      XDG_SESSION_TYPE= \
+      WAYLAND_DISPLAY= \
+      NIRI_SOCKET= \
+      SWAYSOCK= \
+      MANGO_INSTANCE_SIGNATURE= \
+      HYPRLAND_INSTANCE_SIGNATURE= \
+      KDE_FULL_SESSION= \
+      KDE_SESSION_VERSION= \
+      KDE_SESSION_UID= \
+      KDE_SESSION_VT= \
+      KDE_APPLICATIONS_AS_SCOPE= \
+      GNOME_DESKTOP_SESSION_ID= \
+      GNOME_SETUP_DISPLAY= \
+      MATE_DESKTOP_SESSION_ID= \
+      CINNAMON_VERSION= \
+      LXQT_SESSION_CONFIG= \
+      LXQT_SESSION_ID= \
+      AWESOME_CONF= \
+      NIX_GSETTINGS_OVERRIDES_DIR= \
+      DISPLAY= \
+      XAUTHORITY= \
+      TONELICO_XAPP_PORTAL= \
+      TONELICO_X11_WINDOW_PLACEMENT= 2>/dev/null || true
   '';
 
-  # Plasma launches KWin, Xwayland, Powerdevil, KDED and Plasmashell as
-  # systemd --user units.  greetd/logind only owns the small launcher process
-  # in the login scope, so killing that scope during logout does not by itself
-  # stop Plasma's user units.  Explicitly retire the graphical-session target
-  # and wait for KWin/Xwayland to release DRM and display :0 before another
-  # desktop is allowed to start.
+  # Plasma launches its compositor through user units that can outlive the
+  # greetd login scope. Stop Plasma's session targets and wait for its own KWin
+  # unit to finish before starting an X11 desktop. Never kill every Xwayland
+  # process for this UID: a different active graphical session may own it.
   plasmaSessionCleanup = pkgs.writeShellScriptBin "plasma-session-cleanup" ''
     set -uo pipefail
 
     SYSTEMCTL=/run/current-system/sw/bin/systemctl
-    PGREP=/run/current-system/sw/bin/pgrep
-    PKILL=/run/current-system/sw/bin/pkill
-    UID_ME="$(${pkgs.coreutils}/bin/id -u)"
+    KWIN_UNIT=plasma-kwin_wayland.service
 
-    "$SYSTEMCTL" --user --no-block stop \
+    "$SYSTEMCTL" --user stop \
       plasma-workspace-wayland.target \
       plasma-workspace.target \
-      graphical-session.target 2>/dev/null || true
+      "$KWIN_UNIT" 2>/dev/null || true
 
-    plasma_gone() {
-      ! "$PGREP" -u "$UID_ME" -x kwin_wayland >/dev/null 2>&1 \
-        && ! "$PGREP" -u "$UID_ME" -x Xwayland >/dev/null 2>&1
+    kwin_inactive() {
+      state="$("$SYSTEMCTL" --user show --property=ActiveState --value "$KWIN_UNIT" 2>/dev/null || true)"
+      [ -z "$state" ] || [ "$state" = inactive ] || [ "$state" = failed ]
     }
 
     attempt=0
-    while ! plasma_gone && [ "$attempt" -lt 50 ]; do
+    while ! kwin_inactive && [ "$attempt" -lt 50 ]; do
       ${pkgs.coreutils}/bin/sleep 0.1
       attempt=$((attempt + 1))
     done
 
-    if ! plasma_gone; then
-      "$SYSTEMCTL" --user kill --kill-whom=all --signal=TERM \
-        plasma-kwin_wayland.service 2>/dev/null || true
-      "$PKILL" -TERM -u "$UID_ME" -x kwin_wayland 2>/dev/null || true
-      "$PKILL" -TERM -u "$UID_ME" -x Xwayland 2>/dev/null || true
-
-      attempt=0
-      while ! plasma_gone && [ "$attempt" -lt 30 ]; do
-        ${pkgs.coreutils}/bin/sleep 0.1
-        attempt=$((attempt + 1))
-      done
-    fi
-
-    if ! plasma_gone; then
-      echo "plasma-session-cleanup: KWin/Xwayland did not stop" >&2
+    if ! kwin_inactive; then
+      echo "plasma-session-cleanup: $KWIN_UNIT did not stop" >&2
       exit 1
     fi
   '';
@@ -105,7 +144,7 @@ let
     set -euo pipefail
 
     usage() {
-      echo "Usage: theme-profile-activate <niri|sway|mango|kde>" >&2
+      echo "Usage: theme-profile-activate <niri|sway|mango|hyprland|kde>" >&2
       exit 2
     }
 
@@ -113,7 +152,7 @@ let
     PROFILE="$1"
 
     case "$PROFILE" in
-      niri|sway|mango|kde) ;;
+      niri|sway|mango|hyprland|kde) ;;
       *) usage ;;
     esac
 
@@ -313,12 +352,13 @@ QTEOF
         *niri*|*Niri*) PROFILE="niri" ;;
         *sway*|*Sway*) PROFILE="sway" ;;
         *mango*|*Mango*) PROFILE="mango" ;;
+        *hyprland*|*Hyprland*) PROFILE="hyprland" ;;
         *KDE*|*kde*|*plasma*) PROFILE="kde" ;;
       esac
     fi
 
     case "$PROFILE" in
-      niri|sway|mango) ;;
+      niri|sway|mango|hyprland) ;;
       *) exit 0 ;;
     esac
 
@@ -364,6 +404,11 @@ QTEOF
           mmsg dispatch reload_config 2>/dev/null || true
         fi
         ;;
+      hyprland)
+        if command -v hyprctl >/dev/null 2>&1; then
+          hyprctl reload 2>/dev/null || true
+        fi
+        ;;
     esac
   '';
 
@@ -377,6 +422,7 @@ QTEOF
     RM=/run/current-system/sw/bin/rm
 
     pkill -u "$UID_ME" -f '(\.noctalia-wrapped|/bin/noctalia)' >/dev/null 2>&1 || true
+    /run/current-system/sw/bin/theme-session-cleanup >/dev/null 2>&1 || true
 
     export THEME_PROFILE="niri"
     export NOCTALIA_CONFIG_HOME="$HOME/.config/theme-profiles/niri/config-home"
@@ -385,6 +431,7 @@ QTEOF
     export QT_QPA_PLATFORMTHEME="qt6ct"
 
     /run/current-system/sw/bin/theme-profile-activate niri >/dev/null 2>&1 || true
+    /run/current-system/sw/bin/systemctl --user start geoclue-agent.service 2>/dev/null || true
 
     on_exit() {
       /run/current-system/sw/bin/theme-session-cleanup >/dev/null 2>&1 || true
@@ -426,7 +473,7 @@ QTEOF
         "$SYSTEMCTL" --user cancel "$job_id" 2>/dev/null || true
       done <<< "$jobs"
 
-      "$SYSTEMCTL" --user reset-failed 2>/dev/null || true
+      "$SYSTEMCTL" --user reset-failed niri.service 2>/dev/null || true
       "$RM" -f "$XDG_RUNTIME_DIR"/niri*.sock* 2>/dev/null || true
       sleep 0.3
     }
@@ -455,6 +502,7 @@ QTEOF
   swaySessionGuarded = pkgs.writeShellScriptBin "sway-session-guarded" ''
     set -u
     pkill -u "$(id -u)" -f '(\.noctalia-wrapped|/bin/noctalia)' >/dev/null 2>&1 || true
+    /run/current-system/sw/bin/theme-session-cleanup >/dev/null 2>&1 || true
 
     # Clean up leftover compositors from previous sessions
     /run/current-system/sw/bin/systemctl --user stop niri.service 2>/dev/null || true
@@ -468,14 +516,19 @@ QTEOF
     export QT_QPA_PLATFORMTHEME="qt6ct"
 
     /run/current-system/sw/bin/theme-profile-activate sway >/dev/null 2>&1 || true
+    /run/current-system/sw/bin/systemctl --user start geoclue-agent.service 2>/dev/null || true
 
     on_exit() {
       /run/current-system/sw/bin/theme-session-cleanup >/dev/null 2>&1 || true
     }
     trap on_exit EXIT TERM INT HUP
 
+    /run/current-system/sw/bin/desktop-main-pointer sway >/dev/null 2>&1 &
+    pointer_pid=$!
     /run/current-system/sw/bin/sway "$@"
     rc=$?
+    kill -TERM "$pointer_pid" 2>/dev/null || true
+    wait "$pointer_pid" 2>/dev/null || true
 
     trap - EXIT
     on_exit
@@ -485,6 +538,7 @@ QTEOF
   mangoSessionGuarded = pkgs.writeShellScriptBin "mango-session-guarded" ''
     set -u
     pkill -u "$(id -u)" -f '(\.noctalia-wrapped|/bin/noctalia)' >/dev/null 2>&1 || true
+    /run/current-system/sw/bin/theme-session-cleanup >/dev/null 2>&1 || true
 
     # Clean up leftover compositors from previous sessions
     /run/current-system/sw/bin/systemctl --user stop niri.service 2>/dev/null || true
@@ -498,14 +552,19 @@ QTEOF
     export QT_QPA_PLATFORMTHEME="qt6ct"
 
     /run/current-system/sw/bin/theme-profile-activate mango >/dev/null 2>&1 || true
+    /run/current-system/sw/bin/systemctl --user start geoclue-agent.service 2>/dev/null || true
 
     on_exit() {
       /run/current-system/sw/bin/theme-session-cleanup >/dev/null 2>&1 || true
     }
     trap on_exit EXIT TERM INT HUP
 
+    /run/current-system/sw/bin/desktop-main-pointer mango >/dev/null 2>&1 &
+    pointer_pid=$!
     /run/current-system/sw/bin/mango "$@"
     rc=$?
+    kill -TERM "$pointer_pid" 2>/dev/null || true
+    wait "$pointer_pid" 2>/dev/null || true
 
     trap - EXIT
     on_exit
@@ -515,6 +574,7 @@ QTEOF
   plasmaSessionGuarded = pkgs.writeShellScriptBin "plasma-session-guarded" ''
     set -u
     pkill -u "$(id -u)" -f '(\.noctalia-wrapped|/bin/noctalia)' >/dev/null 2>&1 || true
+    /run/current-system/sw/bin/theme-session-cleanup >/dev/null 2>&1 || true
 
     # Clean up leftover compositors from previous sessions
     /run/current-system/sw/bin/systemctl --user stop niri.service 2>/dev/null || true
@@ -526,6 +586,7 @@ QTEOF
     export KITTY_CONFIG_DIRECTORY="$HOME/.config/kitty/profiles/kde"
 
     /run/current-system/sw/bin/theme-profile-activate kde >/dev/null 2>&1 || true
+    /run/current-system/sw/bin/systemctl --user start geoclue-agent.service 2>/dev/null || true
 
     on_exit() {
       /run/current-system/sw/bin/plasma-session-cleanup >/dev/null 2>&1 || true

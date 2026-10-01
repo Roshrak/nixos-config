@@ -1,8 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+case ":${XDG_CURRENT_DESKTOP:-}:" in
+    *:GNOME:*)
+        exec gnome-session-quit --logout --no-prompt
+        ;;
+esac
+
 if [ -z "${XDG_SESSION_ID:-}" ]; then
-    echo "ERROR: XDG_SESSION_ID is not set." >&2
+    case ":${XDG_CURRENT_DESKTOP:-}:" in
+        *:XFCE:*) exec xfce4-session-logout --logout ;;
+    esac
+    echo "ERROR: XDG_SESSION_ID is not set; no native logout command is known for this session." >&2
     exit 1
 fi
 

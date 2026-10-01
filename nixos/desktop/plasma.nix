@@ -1,6 +1,6 @@
 # KDE Plasma 6 (Wayland) as a second session beside MangoWC + Noctalia.
 # Strictly additive: no existing Mango/Noctalia/greetd behaviour is altered.
-{ config, lib, pkgs, ... }:
+{ pkgs, ... }:
 
 {
   # ---- Plasma 6 desktop (Wayland session) ---------------------------------
@@ -11,43 +11,28 @@
   # exists when SDDM is enabled. Provide it so kscreenlocker works under greetd.
   security.pam.services.kde = { };
 
-  # ---- Expose registered sessions to noctalia-greeter ----------------------
-  # The greeter scans /run/current-system/sw/share/wayland-sessions. Link every
-  # session registered through services.displayManager.sessionPackages there,
-  # so the picker lists Mango, Plasma and Niri.
-  #
-  # niri.desktop is COPIED with a patched Exec= pointing at the guarded
-  # wrapper (~/.local/bin/niri-session-guarded): greetd kills its child
-  # tree when a session ends, which can orphan niri.service; the wrapper
-  # cleans any leftover compositor before exec'ing the real niri-session,
-  # fixing "A niri session is already running." on re-login.
-  environment.systemPackages = [
-    # meta.priority=1: the user env (buildEnv) merges share/wayland-sessions
-    # from BOTH this package and the niri package; without a priority the
-    # niri package's unpatched desktop wins the collision.
-    (pkgs.runCommand "dm-sessions-share" { meta.priority = 1; }
-      ''
-        mkdir -p $out/share/wayland-sessions
-        for f in ${config.services.displayManager.sessionData.desktops}/share/wayland-sessions/*.desktop; do
-          base="$(basename "$f")"
-          if [ "$base" = "niri.desktop" ]; then
-            sed 's|^Exec=.*|Exec=/run/current-system/sw/bin/niri-session-guarded|' "$f" \
-              > "$out/share/wayland-sessions/$base"
-          elif [ "$base" = "mango.desktop" ]; then
-            sed 's|^Exec=.*|Exec=/run/current-system/sw/bin/mango-session-guarded|' "$f" \
-              > "$out/share/wayland-sessions/$base"
-          elif [ "$base" = "sway.desktop" ]; then
-            sed 's|^Exec=.*|Exec=/run/current-system/sw/bin/sway-session-guarded|' "$f" \
-              > "$out/share/wayland-sessions/$base"
-          elif [ "$base" = "plasma.desktop" ]; then
-            sed 's|^Exec=.*|Exec=/run/current-system/sw/bin/plasma-session-guarded|' "$f" \
-              > "$out/share/wayland-sessions/$base"
-          else
-            ln -s "$f" "$out/share/wayland-sessions/$base"
-          fi
-        done
-      '')
-  ];
+  # DrKonqi's package socket is available to the lingering user manager even
+  # at the greeter. Its GUI launcher otherwise crashes while reporting a
+  # non-Plasma crash before a display exists, recursively creating new dumps.
+  # Keep systemd-coredump itself active; launch only Plasma's GUI reporter in
+  # a Plasma session.
+  systemd.user.services."drkonqi-coredump-launcher@" = {
+    description = "Launch DrKonqi for a systemd-coredump crash in Plasma";
+    unitConfig = {
+      PartOf = "graphical-session.target";
+      ConditionUser = "!@system";
+      ConditionEnvironment = "THEME_PROFILE=kde";
+    };
+    serviceConfig = {
+      WorkingDirectory = "%T";
+      ExecStart = "${pkgs.kdePackages.drkonqi}/libexec/drkonqi-coredump-launcher";
+      Slice = "app.slice";
+      Restart = "no";
+    };
+  };
+
+  # Noctalia Greeter session catalogue now lives in desktop/session-catalog.nix
+  # and is an explicit 11-session allowlist.
 
   # ---- Minimal application set ---------------------------------------------
   # Remove obvious duplicates; kitty / nautilus / file-roller / seahorse /
@@ -64,15 +49,10 @@
     discover     # store/updater not wanted
   ];
 
-  # ---- Portals (documentation-in-config; no functional override) ------------
-  # xdg.portal.enable is already true (configuration.nix) with gtk/wlr/
-  # gnome-keyring portals, and services.desktopManager.plasma6.enable adds
-  # kdePackages.xdg-desktop-portal-kde automatically. Backend choice is made
-  # per session via XDG_CURRENT_DESKTOP:
-  #   Mango  ("mango:wlroots") -> /etc/xdg/xdg-desktop-portal/mango-portals.conf
-  #                               (default=gtk, ScreenCast/Screenshot=wlr) - untouched
-  #   Plasma ("KDE")           -> kde-portals.conf shipped by xdg-desktop-portal-kde
-  # No generic portals.conf exists, so neither session can grab the other's backends.
+  # Portal ownership is declared centrally in desktop/portals.nix using the
+  # NixOS typed xdg.portal.config option. The evaluated Plasma config selects
+  # KDE for desktop interfaces and KWallet for Secret; it does not own the
+  # login manager and cannot override the per-session routes of other desktops.
 
   # Graphics, audio, networking, input method, keyring: intentionally absent -
   # all already configured system-wide in configuration.nix and shared by both

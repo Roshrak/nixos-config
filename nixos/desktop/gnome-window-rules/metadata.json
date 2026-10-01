@@ -1,0 +1,7 @@
+{
+  "uuid": "tonelico-window-rules@aesc",
+  "name": "Tonelico Window Rules",
+  "description": "Consistent window geometry and directional keyboard controls for GNOME.",
+  "shell-version": [ "50" ],
+  "settings-schema": "org.gnome.shell.extensions.tonelico-window-rules"
+}

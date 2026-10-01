@@ -18,12 +18,20 @@ let
   '';
   xfceSessionClient = pkgs.writeShellScriptBin "xfce-session-client" ''
     set -u
-    unset WAYLAND_DISPLAY NIRI_SOCKET SWAYSOCK
+    unset WAYLAND_DISPLAY NIRI_SOCKET SWAYSOCK \
+      MANGO_INSTANCE_SIGNATURE HYPRLAND_INSTANCE_SIGNATURE \
+      KDE_FULL_SESSION KDE_SESSION_VERSION KDE_SESSION_UID KDE_SESSION_VT \
+      KDE_APPLICATIONS_AS_SCOPE GNOME_DESKTOP_SESSION_ID GNOME_SETUP_DISPLAY \
+      MATE_DESKTOP_SESSION_ID CINNAMON_VERSION LXQT_SESSION_CONFIG \
+      LXQT_SESSION_ID AWESOME_CONF THEME_PROFILE NOCTALIA_STATE_HOME \
+      NOCTALIA_CONFIG_HOME KITTY_CONFIG_DIRECTORY QT_QPA_PLATFORMTHEME \
+      NIX_GSETTINGS_OVERRIDES_DIR
     export XDG_CURRENT_DESKTOP="XFCE"
     export XDG_SESSION_DESKTOP="XFCE"
     export XDG_SESSION_TYPE="x11"
+    export TONELICO_XAPP_PORTAL="1"
 
-    session_vars=(XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP XDG_SESSION_TYPE)
+    session_vars=(XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP XDG_SESSION_TYPE TONELICO_XAPP_PORTAL)
     [ -n "''${DISPLAY:-}" ] && session_vars+=(DISPLAY)
     [ -n "''${XAUTHORITY:-}" ] && session_vars+=(XAUTHORITY)
     /run/current-system/sw/bin/systemctl --user import-environment \
@@ -38,7 +46,7 @@ let
   '';
   noctaliaXsession = pkgs.writeShellApplication {
     name = "noctalia-greeter-xsession";
-    runtimeInputs = [ pkgs.xinit ];
+    runtimeInputs = [ pkgs.xinit pkgs.coreutils ];
     text = ''
       if [ "$#" -lt 1 ]; then
         echo "usage: noctalia-greeter-xsession <session-command> [args...]" >&2
@@ -62,12 +70,35 @@ let
       fi
 
       seat="''${XDG_SEAT:-seat0}"
+      log_dir="''${XDG_STATE_HOME:-$HOME/.local/state}/tonelico-session-startup"
+      log_file="$log_dir/xfce.log"
+      mkdir -p -- "$log_dir"
+      {
+        printf '\n[%s] XFCE X11 client start\n' "$(date --iso-8601=seconds)"
+        printf 'client='
+        printf '%q ' "$client" "$@"
+        printf '\nDISPLAY=%s XAUTHORITY=%s\n' \
+          "''${DISPLAY:+set}" "''${XAUTHORITY:+set}"
+      } > "$log_file"
+
+      set +e
       if [ -n "''${XDG_VTNR:-}" ]; then
-        exec startx ${xfceSessionClient}/bin/xfce-session-client "$client" "$@" -- ${nixosXserver} \
-          -seat "$seat" -keeptty "vt$XDG_VTNR"
+        startx ${xfceSessionClient}/bin/xfce-session-client "$client" "$@" -- ${nixosXserver} \
+          -seat "$seat" -keeptty "vt$XDG_VTNR" >> "$log_file" 2>&1
+        rc=$?
+      else
+        startx ${xfceSessionClient}/bin/xfce-session-client "$client" "$@" -- ${nixosXserver} \
+          -seat "$seat" -keeptty >> "$log_file" 2>&1
+        rc=$?
       fi
-      exec startx ${xfceSessionClient}/bin/xfce-session-client "$client" "$@" -- ${nixosXserver} \
-        -seat "$seat" -keeptty
+      set -e
+      printf 'startx exit=%s\n' "$rc" >> "$log_file"
+      size="$(wc -c < "$log_file")"
+      if [ "$size" -gt 262144 ]; then
+        tail -c 262144 "$log_file" > "$log_file.tmp"
+        mv "$log_file.tmp" "$log_file"
+      fi
+      exit "$rc"
     '';
   };
   preferredNoctaliaXsession = noctaliaXsession.overrideAttrs (_: {
@@ -608,28 +639,57 @@ let
       pkgs.gnused
       pkgs.xdotool
       pkgs.xrandr
+      pkgs.xev
     ];
     text = ''
-      # Let xfsettingsd restore the saved left/right output layout first.
+      apply_layout_and_pointer() {
+        if ! xrandr --query | grep -q '^eDP-1 connected'; then
+          return 0
+        fi
+        xrandr --output eDP-1 --auto --primary || true
+        external_outputs="$(
+          xrandr --query \
+            | sed -nE '/ connected/ { s/^([^ ]+) connected.*/\1/; /^eDP-/!p; }'
+        )"
+        left_of="eDP-1"
+        while IFS= read -r output; do
+          [ -n "$output" ] || continue
+          xrandr --output "$output" --auto --left-of "$left_of" || true
+          left_of="$output"
+        done <<< "$external_outputs"
+
+        geometry="$(
+          xrandr --query \
+            | sed -n 's/^eDP-1 connected primary \([0-9][0-9]*\)x\([0-9][0-9]*\)+\([0-9][0-9]*\)+\([0-9][0-9]*\).*/\1 \2 \3 \4/p'
+        )"
+        if [ -n "$geometry" ]; then
+          read -r width height offset_x offset_y <<< "$geometry"
+          pointer_x=$((offset_x + width / 2))
+          pointer_y=$((offset_y + height / 2))
+          xdotool mousemove --sync "$pointer_x" "$pointer_y"
+        fi
+      }
+
+      # Let XFCE's display daemon settle, then apply the desired left/right
+      # layout. Reapply and recenter after RandR hotplug notifications.
       sleep 2
+      apply_layout_and_pointer
+      coproc RANDR_EVENTS { xev -root -event randr 2>/dev/null; }
+      event_pid="$RANDR_EVENTS_PID"
+      cleanup() {
+        kill -TERM "$event_pid" 2>/dev/null || true
+        wait "$event_pid" 2>/dev/null || true
+      }
+      trap cleanup EXIT TERM INT HUP
 
-      if ! xrandr --query | grep -q '^eDP-1 connected'; then
-        exit 0
-      fi
-      xrandr --output eDP-1 --primary
-
-      geometry="$(
-        xrandr --query \
-          | sed -n 's/^eDP-1 connected primary \([0-9][0-9]*\)x\([0-9][0-9]*\)+\([0-9][0-9]*\)+\([0-9][0-9]*\).*/\1 \2 \3 \4/p'
-      )"
-      if [ -z "$geometry" ]; then
-        exit 0
-      fi
-
-      read -r width height offset_x offset_y <<< "$geometry"
-      pointer_x=$((offset_x + width / 2))
-      pointer_y=$((offset_y + height / 2))
-      xdotool mousemove --sync "$pointer_x" "$pointer_y"
+      while IFS= read -r -u "''${RANDR_EVENTS[0]}" event; do
+        case "$event" in
+          *RRScreenChangeNotify*|*RRNotify*)
+            sleep 0.7
+            apply_layout_and_pointer
+            ;;
+        esac
+      done
     '';
   };
   xfcePreferLaptopDisplayAutostart = pkgs.writeTextDir "etc/xdg/autostart/xfce-prefer-laptop-display.desktop" ''
@@ -640,14 +700,6 @@ let
     Exec=${xfcePreferLaptopDisplay}/bin/xfce-prefer-laptop-display
     OnlyShowIn=XFCE;
     NoDisplay=true
-  '';
-  xfceGreeterSession = pkgs.runCommand "xfce-greeter-session" { meta.priority = 1; } ''
-    mkdir -p $out/share/xsessions
-    source=${config.services.displayManager.sessionData.desktops}/share/xsessions/xfce.desktop
-    session_exec="$(${pkgs.gnused}/bin/sed -n 's/^Exec=//p' "$source")"
-    ${pkgs.gnused}/bin/sed \
-      "s|^Exec=.*|Exec=${pkgs.coreutils}/bin/env -u WAYLAND_DISPLAY -u NIRI_SOCKET -u SWAYSOCK -u NIXOS_OZONE_WL -u MOZ_ENABLE_WAYLAND XDG_SESSION_TYPE=x11 XDG_CURRENT_DESKTOP=XFCE XDG_SESSION_DESKTOP=XFCE $session_exec|" \
-      "$source" > $out/share/xsessions/xfce.desktop
   '';
   hideXfceWaylandSession = pkgs.writeTextDir "share/wayland-sessions/xfce-wayland.desktop" ''
     [Desktop Entry]
@@ -699,20 +751,22 @@ in
     xfcePicomAutostart
     xfceWindowSizeAutostart
     xfcePreferLaptopDisplayAutostart
-    xfceGreeterSession
     preferredXfceWaylandMask
     preferredXfceNetworkAppletAutostart
   ];
 
-  # The XApp portal and XFCE notification daemon are session-owned. Their
-  # D-Bus activation files are visible system-wide, so scope activation and
-  # teardown to the XFCE graphical session rather than letting them linger or
-  # start under desktops that provide their own implementations.
+  # XApp is routed only for XFCE, and its system-visible D-Bus activation is
+  # guarded by a marker imported by the native NixOS XFCE session wrapper.
+  # XFCE's notification daemon is similarly restricted to XFCE so it cannot
+  # compete with native notification owners in the Wayland sessions.
   systemd.user.services = {
     xdg-desktop-portal-xapp = {
       overrideStrategy = "asDropin";
       unitConfig = {
-        ConditionEnvironment = "XDG_CURRENT_DESKTOP=XFCE";
+        # The backend is launched only by explicit XFCE portal routing. The
+        # marker is imported by xfce-session-client, so XApp stays off in the
+        # other desktops.
+        ConditionEnvironment = "TONELICO_XAPP_PORTAL=1";
         PartOf = "graphical-session.target";
         After = "graphical-session.target";
       };

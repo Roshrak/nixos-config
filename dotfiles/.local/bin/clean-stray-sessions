@@ -1,54 +1,106 @@
 #!/usr/bin/env bash
-# clean-stray-sessions
-# Reap cross-session strays whose single-instance locks would block this
-# session: app scopes left over from a FINISHED graphical session.
-# Scopes that are still active units belong to THIS or another healthy
-# login and are never touched.
+# Reap Chromium processes only when their exact logind session has ended.
+# Unknown cgroups, query failures and live sessions are always preserved.
 set -uo pipefail
 
-U="$(id -u)"
-removed=0
-stale_pids=()
-declare -A stale_start_times=()
-
-# Active user scopes right now (bare unit names).
-active_units="$(systemctl --user list-units --type=scope --state=active --no-legend 2>/dev/null | awk '{print $1}')"
-
-for pid in $(pgrep -u "$U" -x chromium 2>/dev/null); do
-    # Last cgroup entry = the most specific slice the process lives in.
-    cgpath="$(sed -n 's|^0::\(.*\)$|\1|p' "/proc/$pid/cgroup" 2>/dev/null | tail -n1)"
-    unit="${cgpath##*/}"
-
-    if [ -n "$unit" ] && echo "$active_units" | grep -Fxq "$unit"; then
-        continue    # owned by a live scope -> legitimate
-    fi
-
-    start_time="$(awk '{print $22}' "/proc/$pid/stat" 2>/dev/null || true)"
-    if [ -n "$start_time" ] && kill -TERM "$pid" 2>/dev/null; then
-        stale_pids+=("$pid")
-        stale_start_times["$pid"]="$start_time"
-        removed=$((removed+1))
-    fi
-done
-
-sleep 0.4
-for pid in "${stale_pids[@]}"; do
-    current_start="$(awk '{print $22}' "/proc/$pid/stat" 2>/dev/null || true)"
-    if [ -n "${stale_start_times[$pid]}" ] &&
-       [ "$current_start" = "${stale_start_times[$pid]}" ] &&
-       [ -r "/proc/$pid/comm" ] && [ "$(< "/proc/$pid/comm")" = "chromium" ]; then
-        kill -KILL "$pid" 2>/dev/null || true
-    fi
-done
-
-# Drop singleton artifacts pointing at dead pids only.
-lock="$HOME/.config/chromium/SingletonLock"
-if [ -L "$lock" ]; then
-    lpid="$(readlink "$lock" | sed -E 's/^tonelico-nix-([0-9]+)$/\1/')"
-    case "$lpid" in ''|*[!0-9]*) : ;; *) kill -0 "$lpid" 2>/dev/null || rm -f \
-        "$HOME/.config/chromium/SingletonLock" \
-        "$HOME/.config/chromium/SingletonCookie" \
-        "$HOME/.config/chromium/SingletonSocket" ;; esac
+uid="$(id -u)"
+proc_root=/proc
+testing=0
+if [ "${CLEAN_STRAY_TESTING:-0}" = 1 ]; then
+    proc_root="${CLEAN_STRAY_PROC_ROOT:-/proc}"
+    testing=1
 fi
 
-echo "clean-stray-sessions: reaped=$removed"
+systemctl_bin="$(command -v systemctl || true)"
+loginctl_bin="$(command -v loginctl || true)"
+pgrep_bin="$(command -v pgrep || true)"
+if [ -z "$systemctl_bin" ] || [ -z "$loginctl_bin" ] || [ -z "$pgrep_bin" ]; then
+    printf 'clean-stray-sessions: required session-query command missing; left processes untouched\n' >&2
+    exit 0
+fi
+
+session_listing="$("$loginctl_bin" list-sessions --no-legend --no-pager 2>/dev/null)"
+listing_status=$?
+if [ "$listing_status" -ne 0 ]; then
+    printf 'clean-stray-sessions: logind session state unavailable; left processes untouched\n' >&2
+    exit 0
+fi
+
+same_process() {
+    local pid="$1"
+    local expected_start="$2"
+    local expected_cgroup="$3"
+    local actual_start actual_uid actual_comm actual_cgroup
+
+    [ -r "$proc_root/$pid/stat" ] && [ -r "$proc_root/$pid/status" ] &&
+        [ -r "$proc_root/$pid/comm" ] && [ -r "$proc_root/$pid/cgroup" ] || return 1
+
+    actual_start="$(awk '{print $22}' "$proc_root/$pid/stat" 2>/dev/null)" || return 1
+    actual_uid="$(awk '$1 == "Uid:" { print $2; exit }' "$proc_root/$pid/status" 2>/dev/null)" || return 1
+    actual_comm="$(<"$proc_root/$pid/comm")" || return 1
+    actual_cgroup="$(awk -F: '$1 == "0" { print $3; exit }' "$proc_root/$pid/cgroup" 2>/dev/null)" || return 1
+
+    [ "$actual_start" = "$expected_start" ] &&
+        [ "$actual_uid" = "$uid" ] &&
+        [ "$actual_comm" = chromium ] &&
+        [ "$actual_cgroup" = "$expected_cgroup" ]
+}
+
+term_sent=0
+unknown=0
+for pid in $("$pgrep_bin" -u "$uid" -x chromium 2>/dev/null); do
+    case "$pid" in ''|*[!0-9]*) continue ;; esac
+
+    cgroup="$(awk -F: '$1 == "0" { print $3; exit }' "$proc_root/$pid/cgroup" 2>/dev/null)"
+    scope="$(awk -F/ '{ for (i = 1; i <= NF; i++) if ($i ~ /^session-[0-9]+[.]scope$/) { print $i; exit } }' <<< "$cgroup")"
+    case "$scope" in session-[0-9]*.scope) ;; *) unknown=$((unknown + 1)); continue ;; esac
+
+    session_id="${scope#session-}"
+    session_id="${session_id%.scope}"
+    if awk -v id="$session_id" '$1 == id { found = 1 } END { exit !found }' <<< "$session_listing"; then
+        continue
+    fi
+
+    # Absence from a successful logind listing is necessary but not enough:
+    # the exact scope must still exist and be active around this process.
+    scope_state="$("$systemctl_bin" show "$scope" --property=ActiveState --value 2>/dev/null)"
+    scope_status=$?
+    if [ "$scope_status" -ne 0 ] || [ "$scope_state" != active ]; then
+        unknown=$((unknown + 1))
+        continue
+    fi
+
+    start_time="$(awk '{print $22}' "$proc_root/$pid/stat" 2>/dev/null)"
+    if [ -z "$start_time" ] || ! same_process "$pid" "$start_time" "$cgroup"; then
+        unknown=$((unknown + 1))
+        continue
+    fi
+
+    # Re-query logind and the owning cgroup immediately before signalling.
+    session_listing="$("$loginctl_bin" list-sessions --no-legend --no-pager 2>/dev/null)"
+    listing_status=$?
+    scope_state="$("$systemctl_bin" show "$scope" --property=ActiveState --value 2>/dev/null)"
+    scope_status=$?
+    if [ "$listing_status" -ne 0 ] ||
+       awk -v id="$session_id" '$1 == id { found = 1 } END { exit !found }' <<< "$session_listing" ||
+       [ "$scope_status" -ne 0 ] || [ "$scope_state" != active ] ||
+       ! same_process "$pid" "$start_time" "$cgroup"; then
+        unknown=$((unknown + 1))
+        continue
+    fi
+
+    if [ "$testing" -eq 1 ]; then
+        printf 'TEST: would send TERM to chromium pid=%s ended-session=%s\n' "$pid" "$session_id"
+    elif kill -TERM "$pid" 2>/dev/null; then
+        printf 'Sent TERM to Chromium process %s left in ended session %s.\n' "$pid" "$session_id"
+    else
+        printf 'clean-stray-sessions: could not signal verified stale PID %s\n' "$pid" >&2
+        continue
+    fi
+    term_sent=$((term_sent + 1))
+done
+
+# Never delete Chromium singleton metadata here. Chromium itself validates and
+# recovers stale profile locks; removing several lock files races a new launch.
+printf 'clean-stray-sessions: TERM=%s unknown-or-unowned=%s; singleton files left untouched\n' \
+    "$term_sent" "$unknown"

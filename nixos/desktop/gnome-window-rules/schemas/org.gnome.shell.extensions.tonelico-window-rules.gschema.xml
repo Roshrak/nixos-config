@@ -1,0 +1,37 @@
+<schemalist>
+  <schema id="org.gnome.shell.extensions.tonelico-window-rules"
+          path="/org/gnome/shell/extensions/tonelico-window-rules/">
+    <key name="focus-left" type="as">
+      <default><![CDATA[['<Super>h', '<Super>Left']]]></default>
+      <summary>Focus the window to the left</summary>
+    </key>
+    <key name="focus-right" type="as">
+      <default><![CDATA[['<Super>l', '<Super>Right']]]></default>
+      <summary>Focus the window to the right</summary>
+    </key>
+    <key name="focus-up" type="as">
+      <default><![CDATA[['<Super>k', '<Super>Up']]]></default>
+      <summary>Focus the window above</summary>
+    </key>
+    <key name="focus-down" type="as">
+      <default><![CDATA[['<Super>j', '<Super>Down']]]></default>
+      <summary>Focus the window below</summary>
+    </key>
+    <key name="move-left" type="as">
+      <default><![CDATA[['<Super><Control>h', '<Super><Shift>h']]]></default>
+      <summary>Move the window left</summary>
+    </key>
+    <key name="move-right" type="as">
+      <default><![CDATA[['<Super><Control>l', '<Super><Shift>l']]]></default>
+      <summary>Move the window right</summary>
+    </key>
+    <key name="move-up" type="as">
+      <default><![CDATA[['<Super><Control>k', '<Super><Shift>k']]]></default>
+      <summary>Move the window up</summary>
+    </key>
+    <key name="move-down" type="as">
+      <default><![CDATA[['<Super><Control>j', '<Super><Shift>j']]]></default>
+      <summary>Move the window down</summary>
+    </key>
+  </schema>
+</schemalist>

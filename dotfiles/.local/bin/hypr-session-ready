@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# Run from Hyprland's startup hook; wait for the socket to accept clients.
+set -euo pipefail
+
+log() {
+    /run/current-system/sw/bin/logger --tag hyprland-session-ready -- "$*"
+}
+
+ready=false
+for _ in {1..50}; do
+    if timeout 0.2 /run/current-system/sw/bin/wayland-info >/dev/null 2>&1; then
+        ready=true
+        break
+    fi
+    sleep 0.1
+done
+if [ "$ready" != true ]; then
+    log 'ERROR: Wayland socket was not ready within the startup window; compositor services were not started.'
+    exit 1
+fi
+
+variables=(
+    WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP
+    XDG_SESSION_TYPE HYPRLAND_INSTANCE_SIGNATURE THEME_PROFILE
+    NOCTALIA_CONFIG_HOME NOCTALIA_STATE_HOME KITTY_CONFIG_DIRECTORY
+    QT_QPA_PLATFORMTHEME
+)
+
+if ! systemctl --user import-environment "${variables[@]}"; then
+    log 'ERROR: Failed to import Hyprland session variables into systemd; startup deferred.'
+    exit 1
+fi
+if ! dbus-update-activation-environment --systemd "${variables[@]}"; then
+    log 'ERROR: Failed to import Hyprland session variables into D-Bus; startup deferred.'
+    exit 1
+fi
+if ! systemctl --user reset-failed \
+    xdg-desktop-portal-hyprland.service xdg-desktop-portal-gtk.service; then
+    log 'WARNING: Could not reset failed portal unit state.'
+fi
+for unit in xdg-desktop-portal-hyprland.service xdg-desktop-portal-gtk.service; do
+    if systemctl --user start "$unit"; then
+        log "Started $unit."
+    else
+        log "ERROR: Failed to start $unit."
+    fi
+done
+
+# These were previously launched concurrently with the portal environment
+# import. Start them only after the compositor socket and portals are ready.
+if cleanup_output="$(/home/aesc/.local/bin/clean-stray-sessions 2>&1)"; then
+    log "$cleanup_output"
+else
+    log "WARNING: Session cleanup helper returned failure: $cleanup_output"
+fi
+
+start_logged_background() {
+    local tag="$1"
+    shift
+    nohup "$@" </dev/null 2>&1 | /run/current-system/sw/bin/logger --tag "$tag" &
+}
+
+start_logged_background noctalia-hyprland /run/current-system/sw/bin/noctalia-profile hyprland
+start_logged_background hyprland-notification-owner bash /home/aesc/.local/bin/hypr-noctalia-notification-owner
+start_logged_background kanshi-hyprland /run/current-system/sw/bin/kanshi --config /etc/kanshi/hyprland.conf
+if /run/current-system/sw/bin/fcitx5 -d; then
+    log 'Fcitx5 startup command completed.'
+else
+    log 'ERROR: Fcitx5 startup command failed.'
+fi

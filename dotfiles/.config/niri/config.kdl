@@ -62,9 +62,9 @@ spawn-at-startup "/home/aesc/.local/bin/clean-stray-sessions"
 
 // Desktop shell.
 spawn-at-startup "/run/current-system/sw/bin/noctalia-profile" "niri"
+spawn-at-startup "/run/current-system/sw/bin/kanshi" "--config" "/etc/kanshi/niri.conf"
 
 // Authentication / privilege prompts.
-spawn-at-startup "/run/current-system/sw/bin/lxqt-policykit-agent"
 
 
 // ============================================================
@@ -86,6 +86,7 @@ output "HDMI-A-1" {
 output "eDP-1" {
     mode "1920x1200@60.096"
     scale 1
+    focus-at-startup
 
     position x=1920 y=0
 }

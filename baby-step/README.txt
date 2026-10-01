@@ -2,6 +2,10 @@ CHECK IF MY COMPUTER IS OK
 Run:
 ~/baby-step/check-system.sh
 
+This checks configuration and system health. It does not log into and test all
+seven desktop sessions for you. Each session still needs an interactive smoke
+test after a desktop or system change.
+
 UPDATE MY COMPUTER
 Run:
 ~/baby-step/update-system.sh
@@ -9,6 +13,18 @@ Run:
 UPDATE AND SAVE MY CONFIG TO GITHUB
 Run:
 ~/baby-step/update-and-push.sh
+
+This verifies the automated checks before backup. It does not prove every
+desktop session passed its interactive smoke test.
+
+SAVE THE ALREADY-ACTIVE CONFIGURATION TO GITHUB WITHOUT UPGRADING
+Run:
+~/baby-step/update-and-push.sh --backup-only
+
+This checks that the declared system equals the active system, checks health,
+prepares a recoverable snapshot, scans the staged publication tree, and asks for
+SNAPSHOT and PUSH. It does not update flake inputs or packages. Existing staged
+Git work must be reviewed separately; the tool refuses to overwrite it.
 
 READ MY COMPUTER SUMMARY
 Simple version:
@@ -22,8 +38,11 @@ AUDIT AND SYSTEM REVIEW RECORDS
 Current full system snapshot:
 ~/baby-step/system-audit.md
 
-Five-desktop audit and remediation records:
-~/baby-step/reports
+Latest full-audit and follow-up records (local, not uploaded):
+~/baby-step/full-audit-2026-10-01/
+
+Older audit records:
+~/baby-step/reports/
 
 INSTALL OR MOVE TO ANOTHER COMPUTER
 Read this guide first:
@@ -51,6 +70,14 @@ Run:
 SAVE CONFIG LOCALLY WITHOUT COMMITTING OR PUSHING
 Run:
 ~/baby-step/backup-config.sh
+
+The script previews changes before replacing the repository snapshot. Type
+SNAPSHOT only after reviewing them; press Enter to leave the repository alone.
+An already-current snapshot is a no-op. This script never commits or pushes.
+
+Run update-and-push.sh --check-only for local safety checks. Check-only skips
+remote fetch, so it does not refresh GitHub ahead/behind status and does not
+update Nix inputs, change the system, commit, or push.
 
 SYNC WALLPAPERS WITH GOOGLE DRIVE
 Upload:
