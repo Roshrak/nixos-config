@@ -1,3 +1,4 @@
+# public-source-contract=v2
 # source-home-relative<TAB>backup-dotfiles-relative<TAB>kind
 # Code only. Authentication state, .env files, logs, caches, and generated
 # Hermes environments are excluded. The systemd unit files are included by
@@ -6,3 +7,8 @@
 .local/bin/mc_chat_responder.py	.local/bin/mc_chat_responder.py	code
 .config/systemd/user/agy-bridge.service	.config/systemd/user/agy-bridge.service	unit
 .config/systemd/user/mc-chat-responder.service	.config/systemd/user/mc-chat-responder.service	unit
+.hermes/scripts/clean-system.py	.hermes/scripts/clean-system.py	code
+.hermes/scripts/clean-system.job.json	.hermes/scripts/clean-system.job.json	retained
+.hermes/plugins/human-stage-policy/__init__.py	.hermes/plugins/human-stage-policy/__init__.py	retained
+.hermes/plugins/human-stage-policy/plugin.yaml	.hermes/plugins/human-stage-policy/plugin.yaml	retained
+.hermes/skills/human-controlled-project-stages/SKILL.md	.hermes/skills/human-controlled-project-stages/SKILL.md	retained

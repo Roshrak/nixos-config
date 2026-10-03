@@ -2,11 +2,28 @@
 """Validate the complete staged Git tree without displaying secret values."""
 
 import argparse
+import json
+import stat
 import re
 import subprocess
 import sys
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
+
+_PUBLIC_FILES = None
+def public_files():
+    global _PUBLIC_FILES
+    if _PUBLIC_FILES is None:
+        contract = Path(__file__).with_name("custom-service-manifest.json")
+        if contract.is_symlink() or not stat.S_ISREG(contract.lstat().st_mode):
+            raise ValueError("public source contract is not a regular file")
+        data = json.loads(contract.read_text())
+        files = data.get("public_files", [])
+        pattern = re.compile(r"^\.hermes/(agy_bridge\.py|scripts/clean-system(\.py|\.job\.json)|plugins/human-stage-policy/(__init__\.py|plugin\.yaml)|skills/human-controlled-project-stages/SKILL\.md)$")
+        if data.get("schema_version") != 1 or len(files) != 6 or len({f["path"] for f in files}) != 6 or any(not pattern.fullmatch(f["path"]) for f in files):
+            raise ValueError("invalid public source contract")
+        _PUBLIC_FILES = {"dotfiles/" + f["path"] for f in files}
+    return _PUBLIC_FILES
 
 def allowed_path(path):
     if any(ord(char) < 32 or ord(char) == 127 for char in path):
@@ -14,12 +31,14 @@ def allowed_path(path):
     parts = PurePosixPath(path).parts
     if not parts or path.startswith("/") or ".." in parts:
         return False
-    if path in {"README.md", ".gitignore"}:
+    if path in {"README.md", ".gitignore", ".gitattributes"}:
         return True
-    if path == "dotfiles/.hermes/agy_bridge.py":
+    if path.startswith("wallpapers/"):
+        return PurePosixPath(path).suffix.lower() in {".jpg", ".jpeg", ".png", ".md", ".json"}
+    if path in public_files():
         return True
     return path.startswith((
-        "nixos/", "baby-step/", "scripts/", "docs/", "dotfiles/.config/",
+        "nixos/", "installation/", "baby-step/", "scripts/", "docs/", "dotfiles/.config/",
         "dotfiles/.local/bin/", "dotfiles/.local/share/applications/",
         "dotfiles/.local/share/desktop-look-toggle/",
     ))
@@ -36,7 +55,11 @@ def forbidden_path(path):
         return True
     if name.endswith((".key", ".pem", ".p12", ".pfx")) or ".giant-backup-" in name:
         return True
-    if path.startswith(("baby-step/logs/", "baby-step/state/", "baby-step/backups/", "baby-step/full-audit-")):
+    if path.startswith(("baby-step/logs/", "baby-step/state/", "baby-step/backups/", "baby-step/reports/", "baby-step/full-audit-")):
+        return True
+    if path.startswith(("baby-step/gen129-golden-recovery-", "baby-step/script-install-github-")):
+        return True
+    if path.startswith("baby-step/system-audit") and path.endswith(".md"):
         return True
     if path == "dotfiles/.config/fcitx5/conf/cached_layouts":
         return True
@@ -52,10 +75,11 @@ TOKEN = re.compile(
     rb"(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{30,}|"
     rb"sk-(?:proj-|svcacct-)?[A-Za-z0-9_-]{20,}|hf_[A-Za-z0-9]{20,}|"
     rb"tskey-[A-Za-z0-9_-]{20,}|AKIA[A-Z0-9]{16}|"
-    rb"-----BEGIN (?:RSA |OPENSSH |EC |DSA |ENCRYPTED )?PRIVATE KEY-----)"
+    rb"-----BEGIN (?:RSA |OPENSSH |EC |DSA |ENCRYPTED )?PRIVATE KEY-----|"
+    rb"(?<![A-Za-z0-9_])[0-9]{5,16}:[A-Za-z0-9_-]{35}(?![A-Za-z0-9_-]))"
 )
 LITERAL = re.compile(
-    rb"\b(?:access[_-]?token|refresh[_-]?token|api[_-]?key|client[_-]?secret|password|passwd)"
+    rb"\b(?:access[_-]?token|refresh[_-]?token|bot[_-]?token|telegram[_-]?(?:bot[_-]?)?token|api[_-]?key|client[_-]?secret|password|passwd)"
     rb"[\"']?\s*(?:=|:)\s*[\"']([^\"'$\r\n]{8,})[\"']", re.I
 )
 
@@ -96,7 +120,7 @@ def main():
             if stage != b"0" or mode not in {b"100644", b"100755", b"120000"}:
                 failures.append((path, "unmerged or unsupported index entry"))
                 continue
-            if not allowed_path(path) or forbidden_path(path):
+            if (path.startswith("dotfiles/.hermes/") and mode == b"120000") or not allowed_path(path) or forbidden_path(path):
                 failures.append((path, "unapproved/private/generated path"))
                 continue
             data = git(args.repo, "cat-file", "blob", blob.decode("ascii"))

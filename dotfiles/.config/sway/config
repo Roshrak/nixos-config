@@ -63,9 +63,7 @@ client.urgent           #f38ba8 #1e1e2e #cdd6f4 #f38ba8   #f38ba8
 include ~/.config/sway/colors
 
 # Startup services
-exec --no-startup-id systemctl --user import-environment WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP SWAYSOCK KITTY_CONFIG_DIRECTORY THEME_PROFILE NOCTALIA_STATE_HOME NOCTALIA_CONFIG_HOME QT_QPA_PLATFORMTHEME
-exec --no-startup-id dbus-update-activation-environment --systemd WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP SWAYSOCK KITTY_CONFIG_DIRECTORY THEME_PROFILE NOCTALIA_STATE_HOME NOCTALIA_CONFIG_HOME QT_QPA_PLATFORMTHEME
-exec --no-startup-id systemctl --user restart xdg-desktop-portal-wlr xdg-desktop-portal
+exec --no-startup-id /run/current-system/sw/bin/bash -c 'if [ -x /run/current-system/sw/bin/sway-session-ready ]; then exec /run/current-system/sw/bin/sway-session-ready; else /run/current-system/sw/bin/systemctl --user import-environment WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP SWAYSOCK KITTY_CONFIG_DIRECTORY THEME_PROFILE NOCTALIA_STATE_HOME NOCTALIA_CONFIG_HOME QT_QPA_PLATFORMTHEME && /run/current-system/sw/bin/dbus-update-activation-environment --systemd WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP SWAYSOCK KITTY_CONFIG_DIRECTORY THEME_PROFILE NOCTALIA_STATE_HOME NOCTALIA_CONFIG_HOME QT_QPA_PLATFORMTHEME && /run/current-system/sw/bin/systemctl --user restart xdg-desktop-portal-wlr xdg-desktop-portal; fi'
 exec --no-startup-id /home/aesc/.local/bin/clean-stray-sessions
 exec --no-startup-id /run/current-system/sw/bin/theme-profile-activate sway
 exec --no-startup-id kanshi --config /etc/kanshi/sway.conf
@@ -84,6 +82,8 @@ bindsym $mod+Shift+e exec noctalia msg panel-toggle session
 bindsym Print exec noctalia msg screenshot-region
 bindsym $mod+v exec noctalia msg panel-toggle clipboard
 bindsym Mod1+Tab exec noctalia msg window-switcher
+bindsym $mod+o exec noctalia msg window-switcher
+bindsym --whole-window $mod+Shift+button2 exec noctalia msg window-switcher
 bindsym Mod1+z exec fcitx5-remote -t
 
 # Hardware and media keys through Noctalia / WirePlumber

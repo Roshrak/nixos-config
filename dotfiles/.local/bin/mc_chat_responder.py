@@ -4,7 +4,9 @@ import sys
 import time
 import re
 import json
-import glob
+import stat
+import socket
+import struct
 import logging
 import subprocess
 import urllib.request
@@ -60,55 +62,6 @@ def is_bot_echo(msg: str) -> bool:
         if sent_text in clean_m or (len(clean_m) > 12 and clean_m in sent_text):
             return True
     return False
-
-def ensure_wayland_env():
-    if "NIRI_SOCKET" not in os.environ or not os.path.exists(os.environ.get("NIRI_SOCKET", "")):
-        socks = sorted(glob.glob("/run/user/1000/niri*.sock"))
-        if socks:
-            os.environ["NIRI_SOCKET"] = socks[-1]
-    if "SWAYSOCK" not in os.environ or not os.path.exists(os.environ.get("SWAYSOCK", "")):
-        socks = glob.glob("/run/user/1000/sway-ipc.*.sock")
-        if socks:
-            os.environ["SWAYSOCK"] = socks[0]
-    os.environ.setdefault("WAYLAND_DISPLAY", "wayland-1")
-    os.environ.setdefault("XDG_RUNTIME_DIR", "/run/user/1000")
-    os.environ.setdefault("DISPLAY", ":0")
-
-def get_niri_windows():
-    try:
-        ensure_wayland_env()
-        res = subprocess.run(["niri", "msg", "-j", "windows"], capture_output=True, text=True, env=os.environ)
-        if res.returncode == 0 and res.stdout.strip():
-            return json.loads(res.stdout)
-    except Exception as e:
-        logger.debug(f"Error getting niri windows: {e}")
-    return []
-
-def focus_minecraft_niri() -> tuple[int | None, int | None]:
-    windows = get_niri_windows()
-    current_focused_id = None
-    mc_id = None
-    for w in windows:
-        if w.get("is_focused"):
-            current_focused_id = w.get("id")
-        title = (w.get("title") or "").lower()
-        app_id = (w.get("app_id") or "").lower()
-        if "minecraft" in title or "minecraft" in app_id:
-            mc_id = w.get("id")
-
-    if mc_id is not None:
-        if current_focused_id != mc_id:
-            subprocess.run(["niri", "msg", "action", "focus-window", "--id", str(mc_id)], env=os.environ, check=False)
-            time.sleep(0.2)
-        return current_focused_id, mc_id
-
-    # Fallback to swaymsg if niri didn't find it
-    subprocess.run(["swaymsg", '[class=".*Minecraft.*"] focus'], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    return None, None
-
-def restore_focus_niri(prev_focus_id: int | None, mc_id: int | None):
-    if prev_focus_id is not None and prev_focus_id != mc_id:
-        subprocess.run(["niri", "msg", "action", "focus-window", "--id", str(prev_focus_id)], env=os.environ, check=False)
 
 def clean_mc_codes(text: str) -> str:
     return re.sub(r"§[0-9a-fk-or]", "", text).strip()
@@ -395,81 +348,299 @@ def handle_response_actions(sender: str, raw_response: str) -> tuple[str, list[t
     clean_chat = ACTION_REGEX.sub(extract_action, raw_response).strip()
     return clean_chat, actions
 
+# Global uinput is seat-wide. These checks reduce accidental targeting; the
+# final focus-check -> injection interval remains a race, not window isolation.
+class InputRefused(RuntimeError):
+    pass
+
+
+def _ipc_command(argv, env=None):
+    try:
+        result = subprocess.run(argv, capture_output=True, text=True, env=env,
+                                timeout=3, check=False)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise InputRefused('session/IPC command could not complete') from exc
+    if result.returncode != 0:
+        raise InputRefused('session/IPC command failed')
+    return result.stdout
+
+
+def _session_properties(session_id):
+    output = _ipc_command(['loginctl', 'show-session', session_id, '--no-pager',
+                          '--property=User', '--property=Active', '--property=Type',
+                          '--property=Class', '--property=LockedHint', '--property=Scope'])
+    return dict(line.split('=', 1) for line in output.splitlines() if '=' in line)
+
+
+def _private_runtime(uid):
+    path = f'/run/user/{uid}'
+    item = os.lstat(path)
+    if not stat.S_ISDIR(item.st_mode) or item.st_uid != uid or stat.S_IMODE(item.st_mode) != 0o700:
+        raise InputRefused('runtime directory is not owned and private')
+    return path
+
+
+def _peer_process(pid):
+    # Read only the identity fields needed for ownership; never log raw environ.
+    with open(f'/proc/{pid}/stat') as stream:
+        raw_stat = stream.read()
+    start_time = raw_stat.rsplit(')', 1)[1].split()[19]
+    with open(f'/proc/{pid}/cgroup') as stream:
+        cgroup = stream.read()
+    with open(f'/proc/{pid}/environ', 'rb') as stream:
+        allowed = {'XDG_SESSION_ID', 'XDG_SESSION_TYPE', 'XDG_SESSION_CLASS'}
+        identity = {}
+        for part in stream.read().split(b'\0'):
+            key, sep, value = part.partition(b'=')
+            name = key.decode(errors='replace')
+            if sep and name in allowed:
+                identity[name] = value.decode(errors='replace')
+    executable = os.path.basename(os.readlink(f'/proc/{pid}/exe'))
+    return {'pid':pid, 'start_time':start_time, 'cgroup':cgroup,
+            'identity':identity, 'executable':executable}
+
+
+def _owned_compositor_ipc(path, runtime, uid, kind, session_id, scope):
+    if not os.path.isabs(path) or os.path.normpath(path) != path or not path.startswith(runtime + '/'):
+        raise InputRefused('compositor socket is outside the private runtime')
+    relative = path[len(runtime)+1:].split('/')
+    current = runtime
+    for component in relative[:-1]:
+        current = os.path.join(current, component)
+        parent = os.lstat(current)
+        if not stat.S_ISDIR(parent.st_mode) or parent.st_uid != uid or parent.st_mode & 0o022:
+            raise InputRefused('compositor socket has an unsafe parent')
+    item = os.lstat(path)
+    if not stat.S_ISSOCK(item.st_mode) or item.st_uid != uid:
+        raise InputRefused('compositor IPC is not an owned socket')
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as conn:
+        conn.settimeout(2)
+        conn.connect(path)
+        pid, peer_uid, _ = struct.unpack('3i', conn.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))
+    if peer_uid != uid or pid <= 0:
+        raise InputRefused('compositor socket has a foreign peer')
+    process = _peer_process(pid)
+    if process['executable'] != kind:
+        raise InputRefused('IPC peer is not the expected compositor')
+    scoped = any(scope in line.split(':')[-1].split('/') for line in process['cgroup'].splitlines())
+    if not scoped:
+        # Niri can be owned by a user service instead of session-N.scope.
+        # Require both its exact MainPID and explicit same-session identity.
+        if kind != 'niri':
+            raise InputRefused('compositor peer is outside the graphical session scope')
+        unit = _ipc_command(['systemctl','--user','show','niri.service','--property=MainPID','--property=ActiveState','--property=ControlGroup'])
+        props = dict(line.split('=',1) for line in unit.splitlines() if '=' in line)
+        actual_group = next((line.split(':',2)[-1] for line in process['cgroup'].splitlines() if line.startswith('0::')), '')
+        if (props.get('MainPID') != str(pid) or props.get('ActiveState') != 'active'
+                or not actual_group or props.get('ControlGroup') != actual_group
+                or process['identity'].get('XDG_SESSION_ID') != session_id
+                or process['identity'].get('XDG_SESSION_TYPE') != 'wayland'):
+            raise InputRefused('Niri service ownership cannot be tied to this session')
+    after = os.lstat(path)
+    if (after.st_dev, after.st_ino, after.st_uid) != (item.st_dev, item.st_ino, item.st_uid):
+        raise InputRefused('compositor socket changed during ownership verification')
+    return {'socket':path, 'device':item.st_dev, 'inode':item.st_ino,
+            'pid':pid, 'start_time':process['start_time'], 'cgroup':process['cgroup']}
+
+
+def resolve_action_session():
+    uid = os.getuid()
+    sessions = _ipc_command(['loginctl','list-sessions','--no-legend','--no-pager'])
+    graphical = []
+    for line in sessions.splitlines():
+        fields = line.split()
+        if len(fields) < 2:
+            raise InputRefused('malformed logind session inventory')
+        if fields[1] != str(uid):
+            continue
+        session_id = fields[0]
+        if not re.fullmatch(r'[A-Za-z0-9_.-]+', session_id):
+            raise InputRefused('invalid logind session identity')
+        props = _session_properties(session_id)
+        if props.get('User') != str(uid) or not props.get('Type') or not props.get('Class'):
+            raise InputRefused('logind session ownership query is incomplete')
+        if props['Type'] in {'x11','wayland'} and props['Class'] == 'user':
+            graphical.append((session_id, props))
+    # Concurrent graphical sessions can share a uinput seat. Refuse rather
+    # than selecting an arbitrary active/socket match.
+    if len(graphical) != 1:
+        raise InputRefused('a unique graphical session is required')
+    session_id, props = graphical[0]
+    if props.get('Active') != 'yes' or props.get('LockedHint') != 'no' or props['Type'] != 'wayland':
+        raise InputRefused('graphical session is inactive, locked, or unsupported')
+    scope = props.get('Scope', '')
+    if scope != f'session-{session_id}.scope':
+        raise InputRefused('graphical session scope could not be verified')
+    output = _ipc_command(['systemctl','--user','show-environment'])
+    manager = dict(line.split('=',1) for line in output.splitlines() if '=' in line)
+    if (manager.get('XDG_SESSION_ID') != session_id or manager.get('XDG_SESSION_TYPE') != props['Type']
+            or manager.get('XDG_SESSION_CLASS') != 'user'):
+        raise InputRefused('user-manager graphical identity is stale or incomplete')
+    desktop = manager.get('XDG_CURRENT_DESKTOP','').lower().split(':')
+    supported = [kind for kind in ('niri','sway') if kind in desktop]
+    if len(supported) != 1:
+        raise InputRefused('this desktop has no verified Minecraft input adapter')
+    kind = supported[0]
+    runtime = _private_runtime(uid)
+    if manager.get('XDG_RUNTIME_DIR') != runtime:
+        raise InputRefused('user-manager runtime identity is inconsistent')
+    wayland = manager.get('WAYLAND_DISPLAY', '')
+    if not re.fullmatch(r'wayland-[A-Za-z0-9_.-]+', wayland):
+        raise InputRefused('actual Wayland display name is missing or invalid')
+    display_node = os.lstat(os.path.join(runtime, wayland))
+    if not stat.S_ISSOCK(display_node.st_mode) or display_node.st_uid != uid:
+        raise InputRefused('Wayland display is not an owned socket')
+    ipc_key = 'NIRI_SOCKET' if kind == 'niri' else 'SWAYSOCK'
+    path = manager.get(ipc_key, '')
+    proof = _owned_compositor_ipc(path, runtime, uid, kind, session_id, scope)
+    if _session_properties(session_id) != props:
+        raise InputRefused('graphical session changed during verification')
+    # Never reuse service-time display/socket defaults or import secret manager
+    # variables. Construct only the documented graphical capability fields.
+    env = {key:value for key,value in os.environ.items() if key not in
+           {'DISPLAY','WAYLAND_DISPLAY','NIRI_SOCKET','SWAYSOCK','XDG_SESSION_ID','XDG_SESSION_TYPE','XDG_SESSION_CLASS','XDG_CURRENT_DESKTOP','XDG_RUNTIME_DIR'}}
+    for key in ('XDG_SESSION_ID','XDG_SESSION_TYPE','XDG_SESSION_CLASS','XDG_CURRENT_DESKTOP','XDG_RUNTIME_DIR','WAYLAND_DISPLAY',ipc_key):
+        env[key] = manager[key]
+    return {'kind':kind,'session_id':session_id,'proof':proof,'env':env}
+
+
+def _compositor_windows(context):
+    kind, env = context['kind'], context['env']
+    if kind == 'niri':
+        value = json.loads(_ipc_command(['niri','msg','-j','windows'],env))
+        if not isinstance(value,list) or not all(isinstance(row,dict) for row in value):
+            raise InputRefused('malformed Niri windows response')
+        return value
+    tree = json.loads(_ipc_command(['swaymsg','-r','-t','get_tree'],env))
+    if not isinstance(tree,dict):
+        raise InputRefused('malformed Sway tree response')
+    result = []
+    def walk(node):
+        if not isinstance(node,dict):
+            raise InputRefused('malformed Sway tree node')
+        properties = node.get('window_properties') or {}
+        if not isinstance(properties,dict):
+            raise InputRefused('malformed Sway window properties')
+        if node.get('app_id') or properties.get('class'):
+            result.append({'id':node.get('id'),'app_id':node.get('app_id') or properties.get('class'),
+                           'pid':node.get('pid'),'is_focused':node.get('focused',False)})
+        for key in ('nodes','floating_nodes'):
+            children = node.get(key,[])
+            if not isinstance(children,list):
+                raise InputRefused('malformed Sway children')
+            for child in children: walk(child)
+    walk(tree)
+    return result
+
+
+def _minecraft_window(rows):
+    matches = [row for row in rows if isinstance(row.get('app_id'),str) and
+               re.fullmatch(r'(?:minecraft(?: [0-9][A-Za-z0-9. _-]*)?|net\.minecraft\.client\.main\.Main|com\.mojang\.minecraft)',row['app_id'],re.IGNORECASE)]
+    if len(matches) != 1:
+        raise InputRefused('an exact, unique Minecraft application window is required')
+    target = matches[0]
+    if type(target.get('id')) is not int or target['id'] <= 0:
+        raise InputRefused('Minecraft window identity is invalid')
+    return target
+
+
+def _window_identity(row):
+    return (row.get('id'),row.get('app_id'),row.get('pid'))
+
+
+def _window_action(context, action, window_id):
+    if type(window_id) is not int or window_id <= 0:
+        raise InputRefused('invalid window-action target')
+    if context['kind'] == 'niri':
+        verb = 'focus-window' if action == 'focus' else 'close-window'
+        _ipc_command(['niri','msg','action',verb,'--id',str(window_id)],context['env'])
+    else:
+        verb = 'focus' if action == 'focus' else 'kill'
+        output = json.loads(_ipc_command(['swaymsg','-r',f'[con_id={window_id}] {verb}'],context['env']))
+        if not isinstance(output,list) or len(output) != 1 or output[0].get('success') is not True:
+            raise InputRefused('Sway rejected the exact window action')
+
+
+def _fresh_focused_target(context, target):
+    fresh = resolve_action_session()
+    if (fresh['session_id'],fresh['kind'],fresh['proof']) != (context['session_id'],context['kind'],context['proof']):
+        raise InputRefused('compositor/session identity changed before input')
+    rows = _compositor_windows(fresh)
+    actual = _minecraft_window(rows)
+    focused = [row for row in rows if row.get('is_focused') is True]
+    if _window_identity(actual) != _window_identity(target) or len(focused) != 1 or _window_identity(focused[0]) != _window_identity(target):
+        raise InputRefused('Minecraft focus changed or could not be confirmed')
+    return fresh
+
+
+def _guarded_input(tokens, sent_text=None, close_after=False):
+    try:
+        context = resolve_action_session()
+        rows = _compositor_windows(context)
+        target = _minecraft_window(rows)
+        previous = [row for row in rows if row.get('is_focused') is True]
+        previous = previous[0] if len(previous) == 1 else None
+        if not target.get('is_focused'):
+            _window_action(context,'focus',target['id'])
+            time.sleep(0.2)
+        context = _fresh_focused_target(context,target)
+        # One last fresh focus observation immediately before global input.
+        context = _fresh_focused_target(context,target)
+        result = subprocess.run([UINPUT_BIN,*tokens],env=context['env'],capture_output=True,
+                                text=True,timeout=8,check=False)
+        if result.returncode != 0:
+            raise InputRefused('uinput command failed; input completion is unconfirmed')
+        if sent_text is not None:
+            record_bot_sent(sent_text)
+        if close_after:
+            context = _fresh_focused_target(context,target)
+            _window_action(context,'close',target['id'])
+        elif previous and _window_identity(previous) != _window_identity(target):
+            # Do not steal focus if the operator switched windows mid-action.
+            try:
+                context = _fresh_focused_target(context,target)
+                present = _compositor_windows(context)
+                if any(_window_identity(row)==_window_identity(previous) for row in present):
+                    _window_action(context,'focus',previous['id'])
+            except (InputRefused,OSError,ValueError,KeyError,TypeError,IndexError,AttributeError,struct.error):
+                logger.warning('Minecraft input completed; previous focus was not safely restored')
+        return True
+    except (InputRefused,OSError,ValueError,KeyError,TypeError,IndexError,AttributeError,struct.error,subprocess.TimeoutExpired) as exc:
+        logger.warning('Minecraft action refused or incomplete: %s',exc)
+        return False
+
+
 def send_command(command: str):
-    cmd_name = command.lstrip("/")
-    record_bot_sent(f"/{cmd_name}")
-    logger.info(f"Executing Minecraft command: /{cmd_name}")
-    ensure_wayland_env()
+    cmd_name = command.lstrip('/')
+    if not cmd_name:
+        return False
+    return _guarded_input(['slash','sleep:250',f'type:{cmd_name}','sleep:250','enter','sleep:200'],f'/{cmd_name}')
 
-    prev_id, mc_id = focus_minecraft_niri()
-    time.sleep(0.25)
-
-    cmd = [
-        UINPUT_BIN,
-        "slash",
-        "sleep:250",
-        f"type:{cmd_name}",
-        "sleep:250",
-        "enter",
-        "sleep:200"
-    ]
-    subprocess.run(cmd, check=False)
-    time.sleep(0.25)
-
-    restore_focus_niri(prev_id, mc_id)
 
 def send_chat(reply: str):
-    if not reply or reply.upper() == "IGNORE":
-        return
-    record_bot_sent(reply)
-    logger.info(f"Typing into Minecraft: {reply}")
-    ensure_wayland_env()
+    if not reply or reply.upper() == 'IGNORE':
+        return False
+    return _guarded_input(['t','sleep:250',f'type:{reply}','sleep:250','enter','sleep:200'],reply)
 
-    prev_id, mc_id = focus_minecraft_niri()
-    time.sleep(0.25)
-
-    cmd = [
-        UINPUT_BIN,
-        "t",
-        "sleep:250",
-        f"type:{reply}",
-        "sleep:250",
-        "enter",
-        "sleep:200"
-    ]
-    subprocess.run(cmd, check=False)
-    time.sleep(0.25)
-
-    restore_focus_niri(prev_id, mc_id)
 
 def execute_jump():
-    logger.info("Executing jump in Minecraft...")
-    ensure_wayland_env()
-    prev_id, mc_id = focus_minecraft_niri()
-    time.sleep(0.15)
-    cmd = [
-        UINPUT_BIN,
-        "type: ",
-        "sleep:200"
-    ]
-    subprocess.run(cmd, check=False)
-    time.sleep(0.2)
-    restore_focus_niri(prev_id, mc_id)
+    return _guarded_input(['type: ','sleep:200'])
+
 
 def execute_logoff(sender: str):
     if not is_authorized_to_logoff(sender):
-        logger.warning(f"Unauthorized logoff attempt by {sender} blocked!")
-        return
-    logger.info(f"Authorized logoff requested by {sender}. Disconnecting and exiting...")
-    time.sleep(1.5)
-    # Send disconnect command in Minecraft
-    send_command("disconnect")
-    time.sleep(1.0)
-    # Terminate Minecraft process if still alive
-    subprocess.run(["pkill", "-f", "openjdk.*minecraft|net.minecraft"], check=False)
-    # Stop systemd unit cleanly so it doesn't immediately restart
-    subprocess.run(["systemctl", "--user", "stop", "mc-chat-responder.service"], check=False)
+        logger.warning('Unauthorized logoff attempt blocked')
+        return False
+    if not _guarded_input(['slash','sleep:250','type:disconnect','sleep:250','enter','sleep:200'], '/disconnect', close_after=True):
+        return False
+    # Only stop this helper after the exact game-window close was accepted.
+    try:
+        _ipc_command(['systemctl','--user','stop','mc-chat-responder.service'])
+    except InputRefused as exc:
+        logger.warning('Minecraft logoff completed; responder stop was not confirmed: %s',exc)
+        return False
     sys.exit(0)
+
 
 def open_log_stream():
     f = open(LOG_PATH, "r", encoding="utf-8", errors="replace")
@@ -532,8 +703,8 @@ def main():
                 now = time.time()
                 if now - last_tpa_time > 3.0:
                     logger.info(f"Incoming server TPA request: '{chat_content}'. Auto-accepting via /tpaccept!")
-                    send_command("tpaccept")
-                    last_tpa_time = now
+                    if send_command("tpaccept"):
+                        last_tpa_time = now
                 continue
 
             # 2. Ignore join/leave notifications (NO auto-greetings)
@@ -588,8 +759,8 @@ def main():
             if raw_reply:
                 clean_reply, actions = handle_response_actions(sender, raw_reply)
                 if clean_reply:
-                    send_chat(clean_reply)
-                    last_sent_time = time.time()
+                    if send_chat(clean_reply):
+                        last_sent_time = time.time()
 
                 # Execute any demanded actions
                 for action_type, action_arg in actions:

@@ -31,6 +31,13 @@ make_fixture() {
         "$dotfiles/.config/systemd/user/agy-bridge.service"
     cp -- "$repo_root/dotfiles/.config/systemd/user/mc-chat-responder.service" \
         "$dotfiles/.config/systemd/user/mc-chat-responder.service"
+    mkdir -p "$repo/baby-step/lib"
+    cp -- "$repo_root/baby-step/lib/custom-service-manifest.json" "$repo/baby-step/lib/custom-service-manifest.json"
+    while IFS= read -r relative; do
+        [ "$relative" != .hermes/agy_bridge.py ] || continue
+        mkdir -p "$dotfiles/$(dirname -- "$relative")"
+        cp -- "$repo_root/dotfiles/$relative" "$dotfiles/$relative"
+    done < <(jq -r '.public_files[].path' "$repo_root/baby-step/lib/custom-service-manifest.json")
     printf 'selected config\n' > "$dotfiles/.config/other/config"
     printf 'selected bootstrap helper\n' > "$repo/baby-step/helper.sh"
     chmod 0755 "$repo/scripts/lib/custom-service-restore.sh"

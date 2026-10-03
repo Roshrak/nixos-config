@@ -4,6 +4,32 @@ backup_path_error() {
     printf 'Backup destination safety: %s\n' "$*" >&2
 }
 
+BACKUP_SAFETY_LIB_DIR="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+
+backup_pinned_root_identity() {
+    [ "$#" -eq 1 ] || return 2
+    python3 "$BACKUP_SAFETY_LIB_DIR/pinned-rename.py" root-identity "$1"
+}
+
+backup_pinned_parent_identity() {
+    [ "$#" -eq 3 ] || return 2
+    python3 "$BACKUP_SAFETY_LIB_DIR/pinned-rename.py" parent-identity \
+        --root "$1" --root-identity "$2" --path "$3"
+}
+
+backup_pinned_absolute_parent_identity() {
+    [ "$#" -eq 1 ] || return 2
+    python3 "$BACKUP_SAFETY_LIB_DIR/pinned-rename.py" absolute-parent-identity --path "$1"
+}
+
+backup_pinned_rename_noreplace() {
+    [ "$#" -eq 7 ] || return 2
+    python3 "$BACKUP_SAFETY_LIB_DIR/pinned-rename.py" rename \
+        --root "$6" --root-identity "$7" \
+        --source "$1" --destination "$2" --source-identity "$3" \
+        --source-parent-identity "$4" --destination-parent-identity "$5"
+}
+
 # Inspect every path component without resolving through it. Missing components
 # are accepted only as a suffix; dangling links are rejected by the -L test.
 backup_validate_path() {
@@ -12,7 +38,7 @@ backup_validate_path() {
         return 2
     fi
     local path="$1" kind="$2" allow_missing="${3:-1}"
-    local current=/ component index last missing_seen=0 mode owner expected_owner
+    local current=/ component index last missing_seen=0
     local -a components=()
     case "$path" in /*) ;; *) backup_path_error "path is not absolute: $path"; return 1 ;; esac
     case "$kind" in directory|file) ;; *) backup_path_error "unsupported path type: $kind"; return 2 ;; esac

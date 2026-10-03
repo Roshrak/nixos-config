@@ -21,6 +21,8 @@ evaluate_nixos_toplevel() {
             return 2
             ;;
     esac
+    # Local Git filtering can hide required untracked inputs; never stage to evaluate.
+    case "$flake_reference" in /*) flake_reference="path:$flake_reference" ;; esac
 
     result="$(timeout 120 nix eval --offline --no-write-lock-file --raw \
         "${flake_reference}#nixosConfigurations.${host_key}.config.system.build.toplevel.outPath")" || {
@@ -112,6 +114,8 @@ validate_required_build_inputs_from_list() (
     fi
     contract_digest_before="$(source_contract_digest "$contract")" || exit 1
     if ! declare -F nixos_source_manifest >/dev/null 2>&1; then
+        # The caller supplies and validates this manifest path.
+        # shellcheck disable=SC1090
         . "$manifest_script"
     fi
     if ! declare -F nixos_source_manifest >/dev/null 2>&1; then
@@ -219,6 +223,7 @@ verify_nixos_snapshot() (
         exit 2
     fi
 
+    printf '  [CHECK] Required source resources and copied bytes\n' >&2
     temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/source-contract.XXXXXX")" || exit 1
     chmod 0700 "$temp_dir" || exit 1
     trap 'rm -rf -- "$temp_dir"' EXIT
@@ -246,8 +251,10 @@ verify_nixos_snapshot() (
         exit 1
     fi
 
+    printf '  [CHECK] Complete source-system evaluation\n' >&2
     source_toplevel="$(evaluate_nixos_toplevel "$source_reference" "$host_key")" || exit 1
     snapshot_reference="path:$(cd -P -- "$snapshot" && pwd)" || exit 1
+    printf '  [CHECK] Isolated snapshot evaluation and output identity\n' >&2
     snapshot_toplevel="$(evaluate_nixos_toplevel "$snapshot_reference" "$host_key")" || exit 1
     if [ "$source_toplevel" != "$snapshot_toplevel" ]; then
         printf 'Source and prepared snapshot toplevels differ.\n' >&2
@@ -259,6 +266,7 @@ verify_nixos_snapshot() (
         printf 'Source resource contract changed before build.\n' >&2
         exit 1
     fi
+    printf '  [BUILD] Offline restored-source build (timeout: %ss)\n' "$timeout_seconds" >&2
     built="$(timeout "$timeout_seconds" nix build --offline --no-link \
         --no-write-lock-file --print-out-paths \
         "${snapshot_reference}#nixosConfigurations.${host_key}.config.system.build.toplevel")" || {

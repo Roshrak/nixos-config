@@ -62,9 +62,9 @@ spawn-at-startup "/home/aesc/.local/bin/clean-stray-sessions"
 
 // Desktop shell.
 spawn-at-startup "/run/current-system/sw/bin/noctalia-profile" "niri"
-spawn-at-startup "/run/current-system/sw/bin/kanshi" "--config" "/etc/kanshi/niri.conf"
 
-// Authentication / privilege prompts.
+// Hotplug profiles keep eDP-1 at the main/right side and HDMI-A-1 to its left.
+spawn-at-startup "/run/current-system/sw/bin/kanshi" "--config" "/etc/kanshi/niri.conf"
 
 
 // ============================================================
@@ -540,6 +540,7 @@ binds {
 
     // Overview is manual only.
     // Hot corner is disabled above.
+    Mod+Shift+MouseMiddle { toggle-overview; }
     Mod+O {
         toggle-overview;
     }

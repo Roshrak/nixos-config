@@ -10,9 +10,7 @@ Restart=on-failure
 RestartSec=3
 Environment="HOME=/home/aesc"
 Environment="PATH=/home/aesc/.local/bin:/home/aesc/.nix-profile/bin:/run/current-system/sw/bin:/usr/bin:/bin"
-Environment="WAYLAND_DISPLAY=wayland-1"
-Environment="DISPLAY=:0"
-Environment="XDG_RUNTIME_DIR=/run/user/1000"
+Environment="XDG_RUNTIME_DIR=%t"
 
 [Install]
 WantedBy=default.target

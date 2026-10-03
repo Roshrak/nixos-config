@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
 # shellcheck source=lib/common.sh
 . "$SCRIPT_DIR/lib/common.sh"
 . "$SCRIPT_DIR/lib/destination-safety.sh"
@@ -10,6 +10,7 @@ SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 . "$SCRIPT_DIR/lib/custom-service-manifest.sh"
 
 check_only=0
+[ "$#" -le 1 ] || { printf 'ERROR: Use one option at a time.\n' >&2; exit 2; }
 case "${1:-}" in
     "") ;;
     --check-only) check_only=1 ;;
@@ -27,10 +28,12 @@ esac
 
 start_log "backup"
 acquire_maintenance_lock
-TOTAL=6
+TOTAL=7
+[ "$check_only" -eq 0 ] || TOTAL=4
 SNAPSHOT_WORK=""
 SNAPSHOT_CHANGES=0
 required_contract_digest=""
+BACKUP_REPO_IDENTITY=""
 REPLACEMENTS_COMPLETE=0
 rollback_root=""
 replaced_destinations=()
@@ -40,6 +43,14 @@ replacement_installed=()
 replacement_original_identity=()
 replacement_installed_identity=()
 replacement_kind=()
+replacement_destination_parent_identity=()
+replacement_rollback_parent_identity=()
+replacement_prepared_parent_identity=()
+
+command -v python3 >/dev/null 2>&1 || fatal 'Missing required command: python3 for pinned backup publication'
+backup_validate_path "$BACKUP_REPO" directory 0 || fatal 'The backup repository root is unsafe'
+BACKUP_REPO_IDENTITY="$(backup_pinned_root_identity "$BACKUP_REPO")" ||
+    fatal 'Could not pin the backup repository root without following symlinks'
 
 cleanup() {
     local status=$?
@@ -66,7 +77,8 @@ backup_path_identity() {
 }
 
 rollback_replacements() {
-    local index destination relative rollback kind identity current_identity failed=0
+    local index destination relative rollback quarantine kind identity current_identity
+    local destination_parent_identity rollback_parent_identity quarantine_parent_identity failed=0
     for ((index=${#replaced_destinations[@]} - 1; index >= 0; index--)); do
         destination="${replaced_destinations[$index]}"
         case "$destination" in
@@ -75,7 +87,10 @@ rollback_replacements() {
         esac
         relative="${destination#"$BACKUP_REPO"/}"
         rollback="$rollback_root/$relative"
+        quarantine="$rollback_root/.rolled-back-current-$index"
         kind="${replacement_kind[$index]}"
+        destination_parent_identity="${replacement_destination_parent_identity[$index]}"
+        rollback_parent_identity="${replacement_rollback_parent_identity[$index]}"
         if ! backup_validate_destination "$BACKUP_REPO" "$destination" "$kind" ||
            ! backup_validate_path "$rollback" "$kind" 1 ||
            ! backup_validate_private_directory "$rollback_root"; then
@@ -95,8 +110,27 @@ rollback_replacements() {
                 failed=1
                 continue
             fi
-            if ! rm -rf -- "$destination" || [ -e "$destination" ] || [ -L "$destination" ]; then
-                printf 'Could not safely remove this transaction-installed path: %s\n' "$destination" >&2
+            if [ -e "$quarantine" ] || [ -L "$quarantine" ]; then
+                printf 'Rollback quarantine already exists; preserving it: %s\n' "$quarantine" >&2
+                failed=1
+                continue
+            fi
+            quarantine_parent_identity="$(backup_pinned_absolute_parent_identity "$quarantine")" || {
+                failed=1
+                continue
+            }
+            if ! backup_pinned_rename_noreplace "$destination" "$quarantine" "$identity" \
+                "$destination_parent_identity" "$quarantine_parent_identity" \
+                "$BACKUP_REPO" "$BACKUP_REPO_IDENTITY"; then
+                printf 'Could not isolate the transaction-installed path for rollback: %s\n' \
+                    "$destination" >&2
+                failed=1
+                continue
+            fi
+            if [ "$(backup_path_identity "$quarantine")" != "$identity" ] ||
+               [ -e "$destination" ] || [ -L "$destination" ]; then
+                printf 'Rollback quarantine verification failed; preserving both paths: %s\n' \
+                    "$quarantine" >&2
                 failed=1
                 continue
             fi
@@ -128,7 +162,9 @@ rollback_replacements() {
                 failed=1
                 continue
             fi
-            if ! mv -- "$rollback" "$destination"; then
+            if ! backup_pinned_rename_noreplace "$rollback" "$destination" "$identity" \
+                "$rollback_parent_identity" "$destination_parent_identity" \
+                "$BACKUP_REPO" "$BACKUP_REPO_IDENTITY"; then
                 printf 'Could not restore verified before-image; it remains at %s\n' "$rollback" >&2
                 failed=1
                 continue
@@ -150,6 +186,7 @@ rollback_replacements() {
 replace_tree() {
     local prepared="$1" destination="$2" relative rollback kind=directory
     local had_original=0 original_identity='' prepared_identity current_identity index
+    local destination_parent_identity rollback_parent_identity prepared_parent_identity
     case "$destination" in
         "$BACKUP_REPO"/*) ;;
         *) backup_path_error "replacement escapes repository root: $destination"; return 1 ;;
@@ -168,6 +205,10 @@ replace_tree() {
     backup_validate_path "$rollback" "$kind" 1 || return 1
     backup_validate_rename_filesystem "$prepared" "$(dirname -- "$destination")" \
         "$(dirname -- "$rollback")" || return 1
+    destination_parent_identity="$(backup_pinned_parent_identity \
+        "$BACKUP_REPO" "$BACKUP_REPO_IDENTITY" "$destination")" || return 1
+    rollback_parent_identity="$(backup_pinned_absolute_parent_identity "$rollback")" || return 1
+    prepared_parent_identity="$(backup_pinned_absolute_parent_identity "$prepared")" || return 1
 
     if [ -e "$destination" ] || [ -L "$destination" ]; then
         had_original=1
@@ -181,10 +222,15 @@ replace_tree() {
     replacement_original_identity+=("$original_identity")
     replacement_installed_identity+=("")
     replacement_kind+=("$kind")
+    replacement_destination_parent_identity+=("$destination_parent_identity")
+    replacement_rollback_parent_identity+=("$rollback_parent_identity")
+    replacement_prepared_parent_identity+=("$prepared_parent_identity")
     index=$((${#replaced_destinations[@]} - 1))
 
     if [ "$had_original" -eq 1 ]; then
-        if mv -- "$destination" "$rollback"; then
+        if backup_pinned_rename_noreplace "$destination" "$rollback" "$original_identity" \
+            "$destination_parent_identity" "$rollback_parent_identity" \
+            "$BACKUP_REPO" "$BACKUP_REPO_IDENTITY"; then
             replacement_moved_original[$index]=1
         else
             if [ ! -e "$destination" ] && [ ! -L "$destination" ] && [ -e "$rollback" ] &&
@@ -196,7 +242,9 @@ replace_tree() {
     fi
     backup_validate_destination "$BACKUP_REPO" "$destination" "$kind" || return 1
     backup_validate_path "$prepared" "$kind" 0 || return 1
-    if mv -- "$prepared" "$destination"; then
+    if backup_pinned_rename_noreplace "$prepared" "$destination" "$prepared_identity" \
+        "$prepared_parent_identity" "$destination_parent_identity" \
+        "$BACKUP_REPO" "$BACKUP_REPO_IDENTITY"; then
         replacement_installed[$index]=1
         replacement_installed_identity[$index]="$prepared_identity"
         return 0
@@ -259,6 +307,7 @@ preview_file() {
 replace_file() {
     local prepared="$1" destination="$2" relative rollback
     local kind=file had_original=0 original_identity='' prepared_identity current_identity index
+    local destination_parent_identity rollback_parent_identity prepared_parent_identity
     case "$prepared" in
         "$SNAPSHOT_WORK"/custom-files/*) ;;
         *) return 1 ;;
@@ -276,6 +325,10 @@ replace_file() {
     backup_validate_path "$rollback" "$kind" 1 || return 1
     backup_validate_rename_filesystem "$prepared" "$(dirname -- "$destination")" \
         "$(dirname -- "$rollback")" || return 1
+    destination_parent_identity="$(backup_pinned_parent_identity \
+        "$BACKUP_REPO" "$BACKUP_REPO_IDENTITY" "$destination")" || return 1
+    rollback_parent_identity="$(backup_pinned_absolute_parent_identity "$rollback")" || return 1
+    prepared_parent_identity="$(backup_pinned_absolute_parent_identity "$prepared")" || return 1
     if [ -e "$destination" ] || [ -L "$destination" ]; then
         had_original=1
         original_identity="$(backup_path_identity "$destination")" || return 1
@@ -288,9 +341,14 @@ replace_file() {
     replacement_original_identity+=("$original_identity")
     replacement_installed_identity+=("")
     replacement_kind+=("$kind")
+    replacement_destination_parent_identity+=("$destination_parent_identity")
+    replacement_rollback_parent_identity+=("$rollback_parent_identity")
+    replacement_prepared_parent_identity+=("$prepared_parent_identity")
     index=$((${#replaced_destinations[@]} - 1))
     if [ "$had_original" -eq 1 ]; then
-        if mv -- "$destination" "$rollback"; then
+        if backup_pinned_rename_noreplace "$destination" "$rollback" "$original_identity" \
+            "$destination_parent_identity" "$rollback_parent_identity" \
+            "$BACKUP_REPO" "$BACKUP_REPO_IDENTITY"; then
             replacement_moved_original[$index]=1
         else
             if [ ! -e "$destination" ] && [ ! -L "$destination" ] && [ -e "$rollback" ] &&
@@ -302,7 +360,9 @@ replace_file() {
     fi
     backup_validate_destination "$BACKUP_REPO" "$destination" "$kind" || return 1
     backup_validate_path "$prepared" "$kind" 0 || return 1
-    if mv -- "$prepared" "$destination"; then
+    if backup_pinned_rename_noreplace "$prepared" "$destination" "$prepared_identity" \
+        "$prepared_parent_identity" "$destination_parent_identity" \
+        "$BACKUP_REPO" "$BACKUP_REPO_IDENTITY"; then
         replacement_installed[$index]=1
         replacement_installed_identity[$index]="$prepared_identity"
         return 0
@@ -339,7 +399,18 @@ preview_tree() {
     fi
 }
 
-printf 'Preparing a focused configuration backup.\n\n'
+# The same reviewed public-file contract governs every selected Hermes file.
+PUBLIC_CONTRACT="$(custom_service_public_contract)" || fatal 'Public source contract is unavailable or invalid'
+PUBLIC_PATHS="$(jq -r '.public_files[].path' "$PUBLIC_CONTRACT")" || fatal 'Could not enumerate public source contract'
+PUBLIC_CONTRACT_BEFORE="$(sha256sum -- "$PUBLIC_CONTRACT" "$BABY_STEP_DIR/custom-service-manifest.tsv")" || fatal 'Could not fingerprint selected source contracts'
+custom_destinations_safe() {
+    local relative
+    while IFS= read -r relative; do
+        backup_validate_destination "$BACKUP_REPO" "$BACKUP_REPO/dotfiles/$relative" file || return 1
+    done <<< "$PUBLIC_PATHS"
+}
+
+show_banner 'Configuration backup' 'Validate source -> build disposable snapshot -> preview -> preserve old copy -> replace'
 
 show_step 1 "$TOTAL" "Checking sources and Git repository"
 if require_commands chmod cmp cp diff find flock git grep jq mkdir mktemp mv nix rm sha256sum stat timeout mango niri noctalia Hyprland sort xargs rmdir &&
@@ -355,7 +426,7 @@ if require_commands chmod cmp cp diff find flock git grep jq mkdir mktemp mv nix
        backup_validate_destination "$BACKUP_REPO" "$BACKUP_REPO/dotfiles/.config" directory &&
        backup_validate_destination "$BACKUP_REPO" "$BACKUP_REPO/dotfiles/.local/bin" directory &&
        backup_validate_destination "$BACKUP_REPO" "$BACKUP_REPO/baby-step" directory &&
-       backup_validate_destination "$BACKUP_REPO" "$BACKUP_REPO/dotfiles/.hermes/agy_bridge.py" file; then
+       custom_destinations_safe; then
         show_ok
     else
         show_failed
@@ -413,16 +484,23 @@ else
     fatal "The prepared NixOS snapshot is incomplete"
 fi
 
+show_step 4 "$TOTAL" 'Verifying source coverage and building the disposable snapshot'
+show_detail 'Offline full-system evaluation and build can take several minutes. Each phase is reported below.'
 required_contract_digest="$(source_contract_digest "$BABY_STEP_DIR/required-build-inputs.json")" ||
     fatal "The required NixOS resource contract could not be fingerprinted"
-snapshot_toplevel="$(verify_nixos_snapshot "$NIXOS_DIR" \
-    "$SNAPSHOT_WORK/nixos" "$FLAKE_ATTR" \
-    "$BABY_STEP_DIR/required-build-inputs.json" \
-    "$SCRIPT_DIR/lib/source-manifest.sh" 2>> "$LOG_FILE")" || {
+snapshot_result_file="$SNAPSHOT_WORK/verified-toplevel.txt"
+verify_prepared_snapshot() {
+    verify_nixos_snapshot "$NIXOS_DIR" "$SNAPSHOT_WORK/nixos" "$FLAKE_ATTR" \
+        "$BABY_STEP_DIR/required-build-inputs.json" \
+        "$SCRIPT_DIR/lib/source-manifest.sh" > "$snapshot_result_file"
+}
+run_logged 'Source contract, toplevel parity, and offline snapshot build' verify_prepared_snapshot || {
     show_failed
     fatal "The prepared NixOS snapshot failed resource, evaluation, parity, or build validation; the repository is unchanged"
 }
+snapshot_toplevel="$(cat "$snapshot_result_file")"
 printf 'Prepared NixOS snapshot evaluated and built: %s\n' "$snapshot_toplevel" >> "$LOG_FILE"
+show_ok "Verified candidate: $snapshot_toplevel"
 
 if [ "$check_only" -eq 1 ]; then
     printf '\nSUCCESS: Source coverage, evaluation, and offline build passed.\n'
@@ -432,7 +510,7 @@ if [ "$check_only" -eq 1 ]; then
     exit 0
 fi
 
-show_step 4 "$TOTAL" "Preparing selected user configuration"
+show_step 5 "$TOTAL" "Preparing selected user configuration"
 mkdir -p "$SNAPSHOT_WORK/dotconfig"
 for config_name in \
     mango noctalia kitty fcitx5 nvim fastfetch niri sway hypr xfce4 theme-profiles \
@@ -518,7 +596,7 @@ else
 fi
 show_ok
 
-show_step 5 "$TOTAL" "Preparing helpers and baby-step tools"
+show_step 6 "$TOTAL" "Preparing helpers and baby-step tools"
 mkdir -p "$SNAPSHOT_WORK/local-bin"
 for helper_name in \
     apply-theme-profile clean-stray-sessions niri-session-guarded \
@@ -534,7 +612,7 @@ done
 
 if ! prepare_custom_service_sources "$BABY_STEP_DIR/custom-service-manifest.tsv" \
     "$HOME" "$SNAPSHOT_WORK/dotconfig" "$SNAPSHOT_WORK/local-bin" \
-    "$SNAPSHOT_WORK/custom-files"; then
+    "$SNAPSHOT_WORK/custom-files" "$BACKUP_REPO"; then
     show_failed
     fatal "Custom-service source coverage failed; the repository is unchanged"
 fi
@@ -544,11 +622,17 @@ for baby_file in \
     README.txt system-summary.txt system-summary-for-ai.md \
     check-system.sh rebuild-system.sh update-system.sh \
     backup-config.sh update-and-push.sh sync-wallpapers.sh \
+    generate-system-audit.sh launch_mc_and_spawn.py run-tests.sh \
     custom-service-manifest.tsv required-build-inputs.json \
     tests/backup-destination-safety-test.sh \
+    tests/backup-pinned-rename-test.py \
     tests/clean-stray-sessions-test.sh tests/update-receipt-test.sh \
     tests/backup-source-coverage-test.sh tests/backup-production-integration-test.sh \
-    tests/custom-service-restore-test.sh tests/publication-safety-test.py; do
+    tests/custom-service-restore-test.sh tests/publication-safety-test.py \
+    tests/maintenance-feedback-test.py tests/maintenance-workflow-test.py \
+    tests/wallpaper-sync-test.py tests/minecraft-helper-test.py \
+    tests/audit-report-test.py tests/cleanup-retention-test.py \
+    tests/hermes-public-source-test.py tests/legacy-publication-wrapper-test.py; do
     if [ -f "$BABY_STEP_DIR/$baby_file" ]; then
         mkdir -p "$SNAPSHOT_WORK/baby-step/$(dirname -- "$baby_file")"
         cp -a "$BABY_STEP_DIR/$baby_file" "$SNAPSHOT_WORK/baby-step/$baby_file"
@@ -558,13 +642,15 @@ cp -a "$BABY_STEP_DIR/lib/common.sh" "$SNAPSHOT_WORK/baby-step/lib/common.sh"
 cp -a "$BABY_STEP_DIR/lib/source-manifest.sh" "$SNAPSHOT_WORK/baby-step/lib/source-manifest.sh"
 cp -a "$BABY_STEP_DIR/lib/source-validation.sh" "$SNAPSHOT_WORK/baby-step/lib/source-validation.sh"
 cp -a "$BABY_STEP_DIR/lib/destination-safety.sh" "$SNAPSHOT_WORK/baby-step/lib/destination-safety.sh"
+cp -a "$BABY_STEP_DIR/lib/pinned-rename.py" "$SNAPSHOT_WORK/baby-step/lib/pinned-rename.py"
 cp -a "$BABY_STEP_DIR/lib/custom-service-manifest.sh" \
     "$SNAPSHOT_WORK/baby-step/lib/custom-service-manifest.sh"
 cp -a "$BABY_STEP_DIR/lib/publication-check.py" \
     "$SNAPSHOT_WORK/baby-step/lib/publication-check.py"
+cp -a "$PUBLIC_CONTRACT" "$SNAPSHOT_WORK/baby-step/lib/custom-service-manifest.json"
 show_ok
 
-show_step 6 "$TOTAL" "Updating the recoverable repository snapshot"
+show_step 7 "$TOTAL" "Updating the recoverable repository snapshot"
 for snapshot_pair in \
     "$SNAPSHOT_WORK/nixos:$BACKUP_REPO/nixos" \
     "$SNAPSHOT_WORK/dotconfig:$BACKUP_REPO/dotfiles/.config" \
@@ -578,11 +664,12 @@ for snapshot_pair in \
     fi
 done
 
-if ! preview_file "$SNAPSHOT_WORK/custom-files/.hermes/agy_bridge.py" \
-    "$BACKUP_REPO/dotfiles/.hermes/agy_bridge.py"; then
-    show_failed
-    fatal "Could not preview the custom Hermes helper; the repository is unchanged"
-fi
+while IFS= read -r relative; do
+    if ! preview_file "$SNAPSHOT_WORK/custom-files/$relative" "$BACKUP_REPO/dotfiles/$relative"; then
+        show_failed
+        fatal "Could not preview a selected public Hermes file; the repository is unchanged"
+    fi
+done <<< "$PUBLIC_PATHS"
 
 if [ "$SNAPSHOT_CHANGES" -eq 0 ]; then
     show_ok
@@ -603,6 +690,9 @@ if [ "$replacement_confirmation" != "SNAPSHOT" ]; then
     fatal "Snapshot replacement was not confirmed. The repository is unchanged."
 fi
 
+if [ "$(sha256sum -- "$PUBLIC_CONTRACT" "$BABY_STEP_DIR/custom-service-manifest.tsv")" != "$PUBLIC_CONTRACT_BEFORE" ]; then
+    fatal 'Selected public source contract changed after validation; no destination was replaced'
+fi
 contract_digest_after="$(source_contract_digest "$BABY_STEP_DIR/required-build-inputs.json")" ||
     fatal "The NixOS resource contract changed or became unreadable after build"
 if [ "$contract_digest_after" != "$required_contract_digest" ]; then
@@ -615,7 +705,7 @@ if ! backup_validate_path "$BABY_STEP_DIR" directory 0 ||
    ! backup_validate_destination "$BACKUP_REPO" "$BACKUP_REPO/dotfiles/.config" directory ||
    ! backup_validate_destination "$BACKUP_REPO" "$BACKUP_REPO/dotfiles/.local/bin" directory ||
    ! backup_validate_destination "$BACKUP_REPO" "$BACKUP_REPO/baby-step" directory ||
-   ! backup_validate_destination "$BACKUP_REPO" "$BACKUP_REPO/dotfiles/.hermes/agy_bridge.py" file; then
+   ! custom_destinations_safe; then
     fatal "A backup or recovery destination changed after preview; no destination was replaced"
 fi
 rollback_root="$(mktemp -d "$BACKUP_DIR/repository-previous.XXXXXX")" ||
@@ -647,11 +737,12 @@ if ! replace_tree "$SNAPSHOT_WORK/baby-step" "$BACKUP_REPO/baby-step"; then
     show_failed
     fatal "Could not replace the repository baby-step snapshot"
 fi
-if ! replace_file "$SNAPSHOT_WORK/custom-files/.hermes/agy_bridge.py" \
-    "$BACKUP_REPO/dotfiles/.hermes/agy_bridge.py"; then
-    show_failed
-    fatal "Could not replace the custom Hermes helper"
-fi
+while IFS= read -r relative; do
+    if ! replace_file "$SNAPSHOT_WORK/custom-files/$relative" "$BACKUP_REPO/dotfiles/$relative"; then
+        show_failed
+        fatal "Could not replace a selected public Hermes file"
+    fi
+done <<< "$PUBLIC_PATHS"
 REPLACEMENTS_COMPLETE=1
 
 show_ok

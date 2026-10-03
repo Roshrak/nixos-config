@@ -77,4 +77,7 @@ fi
 backup_validate_rename_filesystem "$repo/nixos" "$repo" "$recovery"
 printf 'Private recovery identity and same-filesystem rename preconditions: PASS\n'
 
+python3 "$script_dir/tests/backup-pinned-rename-test.py" \
+    "$script_dir/lib/pinned-rename.py"
+
 printf 'Backup destination safety helpers: PASS\n'

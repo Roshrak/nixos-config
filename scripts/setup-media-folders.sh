@@ -227,42 +227,8 @@ grep -RHE '^(FilePath|RecFilePath|FFFilePath)=' \
   echo "No OBS profile exists yet. The OBS launcher will set it after OBS creates one."
 
 echo
-echo "=== Backing the new paths up to GitHub, when connected ==="
-if [ -d "$REPO/.git" ]; then
-  mkdir -p \
-    "$REPO/dotfiles/.config" \
-    "$REPO/dotfiles/.local/bin" \
-    "$REPO/dotfiles/.local/share/applications"
-
-  rm -rf "$REPO/dotfiles/.config/noctalia"
-  cp -a "$HOME/.config/noctalia" "$REPO/dotfiles/.config/"
-
-  cp -a "$BIN_DIR/obs-fix-recording-paths" "$REPO/dotfiles/.local/bin/"
-  cp -a "$BIN_DIR/obs-safe" "$REPO/dotfiles/.local/bin/"
-  cp -aL "$BIN_DIR/obs" "$REPO/dotfiles/.local/bin/obs"
-
-  find "$APP_DIR" -maxdepth 1 -type f -iname '*obs*.desktop' \
-    -exec cp -a {} "$REPO/dotfiles/.local/share/applications/" \;
-
-  if [ -f "$HOME/.config/user-dirs.dirs" ]; then
-    cp -a "$HOME/.config/user-dirs.dirs" \
-      "$REPO/dotfiles/.config/user-dirs.dirs"
-  fi
-
-  cd "$REPO"
-  git pull --rebase --autostash
-  git add -A
-
-  if git diff --cached --quiet; then
-    echo "No new Git changes to upload."
-  else
-    git commit -m "Organize screenshots and recording folders $STAMP"
-    git push
-    echo "Uploaded to: $(git remote get-url origin)"
-  fi
-else
-  echo "Skipped GitHub: $REPO is not a Git repository."
-fi
-
+echo "=== Configuration is local; publication is a separate reviewed step ==="
+printf 'To validate and preview a snapshot separately: %s/baby-step/update-and-push.sh --backup-only\n' "$HOME"
+echo "No repository files were replaced, staged, committed, pulled, or pushed."
 echo
 echo "DONE"

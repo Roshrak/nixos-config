@@ -12,6 +12,9 @@ SCRIPT_NAME="$(basename -- "$0")"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd -P)"
 NIXOS_SOURCE="$REPO_ROOT/nixos"
+if [ -f "$REPO_ROOT/installation/flake.nix" ]; then
+    NIXOS_SOURCE="$REPO_ROOT/installation"
+fi
 # shellcheck source=scripts/lib/custom-service-restore.sh
 . "$SCRIPT_DIR/lib/custom-service-restore.sh"
 
@@ -59,6 +62,7 @@ Host selection:
   --system SYSTEM        Nix platform for a new host (default: detected)
   --create-host          Create hosts/NAME when it does not exist
   --hardware FILE        Import a freshly generated hardware-configuration.nix
+  --source PATH          Explicit source flake directory (default: portable installation tree)
 
 Deployment target:
   --target-root PATH     Target filesystem root (default: /; installer: /mnt)
@@ -158,6 +162,11 @@ while [ "$#" -gt 0 ]; do
             HARDWARE_REQUESTED="$2"
             shift 2
             ;;
+        --source)
+            [ "$#" -ge 2 ] && [ -n "$2" ] || fail "--source needs a value"
+            NIXOS_SOURCE="$2"
+            shift 2
+            ;;
         --target-root)
             [ "$#" -ge 2 ] || fail "--target-root needs a value"
             [ -n "$2" ] || fail "--target-root cannot be empty"
@@ -217,7 +226,9 @@ for command_name in \
         fail "Required command is missing: $command_name"
 done
 
-[ -d "$NIXOS_SOURCE" ] || fail "Missing source directory: $NIXOS_SOURCE"
+[ -d "$NIXOS_SOURCE" ] && [ ! -L "$NIXOS_SOURCE" ] ||
+    fail "Source must be a real directory: $NIXOS_SOURCE"
+NIXOS_SOURCE="$(realpath -e -- "$NIXOS_SOURCE")"
 for required_path in \
     flake.nix flake.lock configuration.nix apps-and-lotus.nix \
     claude-code.nix comic-mono.nix desktop/plasma.nix desktop/niri.nix \
@@ -244,6 +255,8 @@ case "$TARGET_NIXOS" in
     /etc/nixos|/*/etc/nixos) ;;
     *) fail "Refusing unexpected target configuration path: $TARGET_NIXOS" ;;
 esac
+custom_restore_safe_path "$TARGET_NIXOS" 1 0 ||
+    fail "Configuration destination contains a linked or unsafe component: $TARGET_NIXOS"
 
 if [ "$ACTION" = "switch" ] && [ "$TARGET_ROOT" != "/" ]; then
     fail "--switch is only valid for the currently running system (--target-root /)"
@@ -417,6 +430,13 @@ if [ "$COPY_REPOSITORY" -eq 1 ]; then
         "$TARGET_HOME/nixos-config" "$BACKUP_BASE/user/nixos-config" \
         "$HOST_UID" "$HOST_GID" ||
         fail "Repository copy source, destination, or recovery path failed preflight"
+fi
+
+if [ "$DEPLOY_USER_CONFIG" -eq 1 ] && { [ -e "$REPO_ROOT/wallpapers" ] || [ -L "$REPO_ROOT/wallpapers" ]; }; then
+    custom_restore_safe_path "$REPO_ROOT/wallpapers" 0 || fail 'Wallpaper source path failed preflight'
+    custom_restore_validate_tree_types "$REPO_ROOT/wallpapers" source || fail 'Wallpaper source types failed preflight'
+    custom_restore_validate_destination_directory "$TARGET_HOME/Pictures" "$HOST_UID" "$HOST_GID" || fail 'Pictures destination failed preflight'
+    custom_restore_validate_destination_directory "$TARGET_HOME/Pictures/Wallpapers" "$HOST_UID" "$HOST_GID" || fail 'Wallpaper destination failed preflight'
 fi
 
 if [ -n "$HARDWARE_REQUESTED" ]; then
@@ -619,17 +639,7 @@ else
     fi
 fi
 
-# A Git-backed path flake ignores untracked files. When an existing local
-# /etc/nixos recovery repository was preserved, stage the exact deployed
-# candidate so a newly created hosts/NAME directory is visible to normal
-# /etc/nixos#NAME evaluation. This does not commit or push anything.
-if [ -d "$TARGET_NIXOS/.git" ]; then
-    command -v git >/dev/null 2>&1 ||
-        fail "git is required because $TARGET_NIXOS contains a local Git repository"
-    if ! git -C "$TARGET_NIXOS" add -A -- . 2>/dev/null; then
-        run_root git -C "$TARGET_NIXOS" add -A -- .
-    fi
-fi
+# Explicit path: references include required new files without changing a Git index.
 
 say "[4/7] Validating the deployed flake..."
 DEPLOYED_HOSTNAME="$(nix eval --raw \
@@ -660,6 +670,21 @@ if [ "$DEPLOY_USER_CONFIG" -eq 1 ]; then
     deploy_selected_user_configuration "$REPO_ROOT" "$TARGET_HOME" \
         "$BACKUP_BASE" "$HOST_UID" "$HOST_GID" \
         "$REPO_ROOT/baby-step/custom-service-manifest.tsv"
+    if [ -d "$REPO_ROOT/wallpapers" ]; then
+        custom_restore_ensure_directory "$TARGET_HOME/Pictures" "$HOST_UID" "$HOST_GID"
+        backup_and_replace_entry "$REPO_ROOT/wallpapers" "$TARGET_HOME/Pictures/Wallpapers" \
+            "$BACKUP_BASE/user/wallpapers" "$HOST_UID" "$HOST_GID"
+    fi
+    # The fresh installed source is /etc/nixos, not a source path from another machine.
+    pointer="$TARGET_HOME/baby-step/state/nixos-source.path"
+    if [ -e "$pointer" ] || [ -L "$pointer" ]; then
+        run_root cp -a -- "$pointer" "$BACKUP_BASE/nixos-source.path.before"
+    fi
+    pointer_stage="$(mktemp "$WORK_DIR/nixos-source.XXXXXXXX")"
+    printf '/etc/nixos\n' > "$pointer_stage"
+    backup_and_replace_entry "$pointer_stage" "$pointer" \
+        "$BACKUP_BASE/user/nixos-source.path" "$HOST_UID" "$HOST_GID"
+    run_root chmod 600 -- "$pointer"
     say "[5/7] Deploying selected user configuration... OK"
 else
     say "[5/7] Deploying selected user configuration... SKIPPED"
@@ -684,13 +709,13 @@ case "$ACTION" in
         say "[7/7] Running requested final action... PREPARED ONLY"
         ;;
     build)
-        run_root nixos-rebuild build --flake "$TARGET_NIXOS#$HOST_KEY"
+        run_root nixos-rebuild build --no-write-lock-file --flake "path:$TARGET_NIXOS#$HOST_KEY"
         say "[7/7] Running requested final action... BUILD OK; NOTHING ACTIVATED"
         ;;
     switch)
-        run_root nixos-rebuild build --flake "$TARGET_NIXOS#$HOST_KEY"
+        run_root nixos-rebuild build --no-write-lock-file --flake "path:$TARGET_NIXOS#$HOST_KEY"
         ACTIVATION_ATTEMPTED=1
-        run_root nixos-rebuild switch --flake "$TARGET_NIXOS#$HOST_KEY"
+        run_root nixos-rebuild switch --no-write-lock-file --flake "path:$TARGET_NIXOS#$HOST_KEY"
         ACTIVATION_COMPLETED=1
         say "[7/7] Running requested final action... SWITCH OK"
         ;;
@@ -699,7 +724,7 @@ case "$ACTION" in
             "path:$TARGET_NIXOS#nixosConfigurations.$HOST_KEY.config.system.build.toplevel" \
             --no-link
         run_root nixos-install --root "$TARGET_ROOT" \
-            --flake "$TARGET_NIXOS#$HOST_KEY"
+            --flake "path:$TARGET_NIXOS#$HOST_KEY" --no-root-passwd
         say "[7/7] Running requested final action... INSTALL OK"
         ;;
 esac
@@ -709,10 +734,10 @@ say "SUCCESS: Bootstrap completed for $TARGET_NIXOS#$HOST_KEY"
 if [ "$ACTION" = "prepare" ]; then
     if [ "$TARGET_ROOT" = "/" ]; then
         say "Nothing was activated. To build safely:"
-        say "  sudo nixos-rebuild build --flake $TARGET_NIXOS#$HOST_KEY"
+        say "  sudo nixos-rebuild build --no-write-lock-file --flake path:$TARGET_NIXOS#$HOST_KEY"
     else
         say "Nothing was installed. To install after review:"
-        say "  sudo nixos-install --root $TARGET_ROOT --flake $TARGET_NIXOS#$HOST_KEY"
+        say "  Prefer scripts/install-from-live-usb.py phases; initialize aesc's password before booting."
     fi
 fi
 say "Backups from this run: $BACKUP_BASE"

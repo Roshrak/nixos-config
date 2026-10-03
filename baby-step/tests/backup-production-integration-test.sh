@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -eEuo pipefail
+export GIT_OPTIONAL_LOCKS=0
 trap 'status=$?; printf "Production integration failed at line %s: %s (status %s)\\n" \
     "${BASH_LINENO[0]}" "$BASH_COMMAND" "$status" >&2; exit "$status"' ERR
 
@@ -32,24 +33,30 @@ mkdir -p "$fixture_home/.config/mango" "$fixture_home/.config/hypr" \
 mkdir -p "$fixture_nixos"
 while IFS= read -r -d '' relative; do
     mkdir -p "$fixture_nixos/$(dirname -- "$relative")"
-    cp -a --no-preserve=ownership "/etc/nixos/$relative" "$fixture_nixos/$relative"
-done < <(nixos_source_manifest /etc/nixos)
+    cp -a --no-preserve=ownership "${NIXOS_TEST_SOURCE:-/etc/nixos}/$relative" "$fixture_nixos/$relative"
+done < <(nixos_source_manifest "${NIXOS_TEST_SOURCE:-/etc/nixos}")
 
 cp -- "$baby_step_dir/custom-service-manifest.tsv" \
     "$fixture_baby_step/custom-service-manifest.tsv"
 cp -- "$baby_step_dir/required-build-inputs.json" \
     "$fixture_baby_step/required-build-inputs.json"
-for maintenance_file in common.sh source-manifest.sh source-validation.sh destination-safety.sh custom-service-manifest.sh publication-check.py; do
+for maintenance_file in common.sh source-manifest.sh source-validation.sh destination-safety.sh custom-service-manifest.sh custom-service-manifest.json publication-check.py pinned-rename.py; do
     cp -- "$baby_step_dir/lib/$maintenance_file" "$fixture_baby_step/lib/$maintenance_file"
 done
 for test_file in backup-destination-safety-test.sh clean-stray-sessions-test.sh update-receipt-test.sh \
     backup-source-coverage-test.sh backup-production-integration-test.sh \
-    custom-service-restore-test.sh; do
+    custom-service-restore-test.sh backup-pinned-rename-test.py; do
     cp -- "$baby_step_dir/tests/$test_file" "$fixture_baby_step/tests/$test_file"
 done
 printf 'fixture mango config\n' > "$fixture_home/.config/mango/config.conf"
 printf 'fixture hyprland config\n' > "$fixture_home/.config/hypr/hyprland.lua"
 printf 'fixture Hermes helper\n' > "$fixture_home/.hermes/agy_bridge.py"
+mkdir -p "$fixture_home/.hermes/scripts"
+cp -- "$HOME/nixos-config/dotfiles/.hermes/scripts/clean-system.py" "$fixture_home/.hermes/scripts/clean-system.py"
+while IFS= read -r relative; do
+    mkdir -p "$fixture_repo/dotfiles/$(dirname -- "$relative")"
+    cp -- "$HOME/nixos-config/dotfiles/$relative" "$fixture_repo/dotfiles/$relative"
+done < <(jq -r '.public_files[] | select(.origin == "repository") | .path' "$baby_step_dir/lib/custom-service-manifest.json")
 printf 'fixture chat helper\n' > "$fixture_home/.local/bin/mc_chat_responder.py"
 printf 'fixture Hermes unit\n' > "$fixture_home/.config/systemd/user/agy-bridge.service"
 printf 'fixture chat unit\n' > "$fixture_home/.config/systemd/user/mc-chat-responder.service"
@@ -85,6 +92,10 @@ git -C "$fixture_repo" init -q
 git -C "$fixture_repo" config user.name 'Audit Fixture'
 git -C "$fixture_repo" config user.email 'audit-fixture@example.invalid'
 git -C "$fixture_repo" add -- dotfiles/.hermes/agy_bridge.py \
+    dotfiles/.hermes/scripts/clean-system.job.json \
+    dotfiles/.hermes/plugins/human-stage-policy/__init__.py \
+    dotfiles/.hermes/plugins/human-stage-policy/plugin.yaml \
+    dotfiles/.hermes/skills/human-controlled-project-stages/SKILL.md \
     dotfiles/.local/bin/original-sentinel nixos/original-sentinel
 git -C "$fixture_repo" -c user.name='Audit Fixture' \
     -c user.email='audit-fixture@example.invalid' commit -qm 'fixture baseline'
@@ -93,20 +104,27 @@ hardware_before="$(sha256sum \
     "$fixture_baby_step/backups/hardware-configuration.previous.nix" | awk '{print $1}')"
 backup_before="$(sha256sum "$fixture_repo/dotfiles/.hermes/agy_bridge.py" | awk '{print $1}')"
 
-set +e
-env HOME="$fixture_home" \
+if env HOME="$fixture_home" \
     BABY_STEP_DIR="$fixture_baby_step" \
     BACKUP_REPO="$fixture_repo" \
     NIXOS_DIR="$fixture_nixos" \
     PATH="$stub_bin:$PATH" \
-    "$backup_script" --check-only > "$scratch/backup.stdout" 2> "$scratch/backup.stderr"
-backup_status=$?
-set -e
+    "$backup_script" --check-only > "$scratch/backup.stdout" 2> "$scratch/backup.stderr"; then
+    backup_status=0
+else
+    backup_status=$?
+fi
 if [ "$backup_status" -ne 0 ]; then
     cat "$scratch/backup.stdout" >&2
     cat "$scratch/backup.stderr" >&2
     latest_log="$(find "$fixture_baby_step/logs" -maxdepth 1 -type f -name 'backup-*.log' -print -quit 2>/dev/null || true)"
-    if [ -n "$latest_log" ]; then sed -n '1,180p' "$latest_log" >&2; fi
+    if [ -n "$latest_log" ]; then
+        if [ -n "${AUDIT_EVIDENCE_DIR:-}" ]; then
+            mkdir -p -- "$AUDIT_EVIDENCE_DIR"
+            cp -- "$latest_log" "$AUDIT_EVIDENCE_DIR/p2-007-backup-checkonly-child.log"
+        fi
+        tail -n 100 "$latest_log" >&2
+    fi
     printf 'Production backup --check-only failed with status %s\n' "$backup_status" >&2
     exit 1
 fi
@@ -293,6 +311,8 @@ cmp -s "$baby_step_dir/lib/source-validation.sh" \
     "$fixture_repo/baby-step/lib/source-validation.sh"
 cmp -s "$baby_step_dir/lib/destination-safety.sh" \
     "$fixture_repo/baby-step/lib/destination-safety.sh"
+cmp -s "$baby_step_dir/lib/pinned-rename.py" \
+    "$fixture_repo/baby-step/lib/pinned-rename.py"
 cmp -s "$baby_step_dir/required-build-inputs.json" \
     "$fixture_repo/baby-step/required-build-inputs.json"
 test -f "$fixture_repo/baby-step/tests/backup-production-integration-test.sh"
@@ -327,32 +347,32 @@ printf 'Confirmed disposable backup transaction replaced fixture trees, preserve
 # Make a harmless fixture-only edit, commit the first tree, then force the
 # second tree's original rename to fail. Cleanup must restore the first tree.
 printf 'synthetic post-snapshot work\n' > "$fixture_repo/nixos/review-dirty-sentinel"
-repo_tree_before_rollback="$(tree_digest "$fixture_repo")"
 git_status_before_rollback="$(git -C "$fixture_repo" status --porcelain=v1 -z | sha256sum | awk '{print $1}')"
 index_before_rollback="$(sha256sum "$fixture_repo/.git/index" | awk '{print $1}')"
-rollback_mv_bin="$scratch/rollback-mv-bin"
-mkdir -m 0700 "$rollback_mv_bin"
-real_mv="$(command -v mv)"
-cat > "$rollback_mv_bin/mv" <<'MVFAILSECOND'
+repo_tree_before_rollback="$(tree_digest "$fixture_repo")"
+rollback_python_bin="$scratch/rollback-python-bin"
+mkdir -m 0700 "$rollback_python_bin"
+real_python="$(command -v python3)"
+cat > "$rollback_python_bin/python3" <<'PYFAILSECOND'
 #!/usr/bin/env bash
-printf '%q ' "$@" >> "$AUDIT_MV_TRACE"
-printf '\n' >> "$AUDIT_MV_TRACE"
-if [ "${1:-}" = -- ] &&
-   [ "${2:-}" = "$BACKUP_REPO/dotfiles/.config" ] &&
-   [[ "${3:-}" == "$BABY_STEP_DIR"/backups/repository-previous.*/dotfiles/.config ]]; then
+printf '%q ' "$@" >> "$AUDIT_RENAME_TRACE"
+printf '\n' >> "$AUDIT_RENAME_TRACE"
+if [ "${1##*/}" = pinned-rename.py ] && [ "${2:-}" = rename ] &&
+   [[ "$*" == *"$BACKUP_REPO/dotfiles/.config"* ]] &&
+   [[ "$*" == *"$BABY_STEP_DIR"/backups/repository-previous.*"/dotfiles/.config"* ]]; then
     printf 'injected second-tree original rename failure\n' >&2
     exit 76
 fi
-exec "$AUDIT_REAL_MV" "$@"
-MVFAILSECOND
-chmod 755 "$rollback_mv_bin/mv"
+exec "$AUDIT_REAL_PYTHON" "$@"
+PYFAILSECOND
+chmod 755 "$rollback_python_bin/python3"
 if printf 'SNAPSHOT\n' | env HOME="$fixture_home" \
     BABY_STEP_DIR="$fixture_baby_step" \
     BACKUP_REPO="$fixture_repo" \
     NIXOS_DIR="$fixture_nixos" \
-    AUDIT_REAL_MV="$real_mv" \
-    AUDIT_MV_TRACE="$scratch/rollback-mv.trace" \
-    PATH="$rollback_mv_bin:$stub_bin:$PATH" \
+    AUDIT_REAL_PYTHON="$real_python" \
+    AUDIT_RENAME_TRACE="$scratch/rollback-rename.trace" \
+    PATH="$rollback_python_bin:$stub_bin:$PATH" \
     "$backup_script" > "$scratch/rollback.stdout" 2> "$scratch/rollback.stderr"; then
     printf 'Injected second-tree rename failure unexpectedly succeeded\n' >&2
     exit 1
@@ -363,7 +383,7 @@ test "$rollback_status" -ne 0
 grep -Fq 'injected second-tree original rename failure' "$scratch/rollback.stderr"
 grep -Fq 'Could not replace the repository user configuration snapshot' \
     "$scratch/rollback.stderr"
-grep -Fq "$fixture_repo/nixos" "$scratch/rollback-mv.trace"
+grep -Fq "$fixture_repo/nixos" "$scratch/rollback-rename.trace"
 test "$(tree_digest "$fixture_repo")" = "$repo_tree_before_rollback"
 test "$(git -C "$fixture_repo" status --porcelain=v1 -z | sha256sum | awk '{print $1}')" = \
     "$git_status_before_rollback"

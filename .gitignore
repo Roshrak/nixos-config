@@ -27,7 +27,11 @@ result-*
 /baby-step/logs/
 /baby-step/state/
 /baby-step/backups/
+/baby-step/reports/
+/baby-step/system-audit*.md
 /baby-step/full-audit-*/
+/baby-step/gen129-golden-recovery-*/
+/baby-step/script-install-github-*/
 
 # The custom-service manifest allows this helper's code only.
 /dotfiles/.hermes/*
@@ -43,3 +47,17 @@ result-*
 /dotfiles/.config/**/.setup-complete
 /dotfiles/.config/fcitx5/conf/cached_layouts
 *.giant-backup-*
+
+# Version the human-stage policy source while keeping all other local Hermes state private.
+!/dotfiles/.hermes/plugins/
+!/dotfiles/.hermes/plugins/human-stage-policy/
+!/dotfiles/.hermes/plugins/human-stage-policy/**
+!/dotfiles/.hermes/skills/
+!/dotfiles/.hermes/skills/human-controlled-project-stages/
+!/dotfiles/.hermes/skills/human-controlled-project-stages/**
+/dotfiles/.hermes/plugins/human-stage-policy/__pycache__/
+
+# Fresh hardware is imported into the host-specific source during installation.
+/installation/hardware-configuration.nix
+**/__pycache__/
+*.pyc

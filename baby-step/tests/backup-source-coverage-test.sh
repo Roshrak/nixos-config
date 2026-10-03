@@ -18,12 +18,14 @@ source_root="$scratch/source"
 snapshot="$scratch/snapshot"
 mkdir -p "$source_root" \
     "$source_root/deep/nixos/desktop/hyprland" \
+    "$source_root/deep/nixos/desktop/autosleep" \
     "$source_root/deep/nixos/desktop/gnome-window-rules/schemas" \
     "$source_root/fonts/nested"
 printf 'fixture flake\n' > "$source_root/flake.nix"
 printf 'fixture lock\n' > "$source_root/flake.lock"
 printf '{ }\n' > "$source_root/deep/nixos/configuration.nix"
 printf 'return {}\n' > "$source_root/deep/nixos/desktop/hyprland/hyprland.lua"
+printf 'def fixture(): return True\n' > "$source_root/deep/nixos/desktop/autosleep/policy.py"
 printf 'export default {}\n' > "$source_root/deep/nixos/desktop/gnome-window-rules/extension.js"
 printf '{"name":"fixture"}\n' > "$source_root/deep/nixos/desktop/gnome-window-rules/metadata.json"
 printf '<schema/>\n' > "$source_root/deep/nixos/desktop/gnome-window-rules/schemas/settings.xml"
@@ -41,6 +43,7 @@ nixos_source_manifest "$source_root" > "$manifest"
 contains_path() { grep -zFqx -- "$1" "$manifest"; }
 for required in \
     flake.nix flake.lock deep/nixos/configuration.nix \
+    deep/nixos/desktop/autosleep/policy.py \
     deep/nixos/desktop/hyprland/hyprland.lua \
     deep/nixos/desktop/gnome-window-rules/extension.js \
     deep/nixos/desktop/gnome-window-rules/metadata.json \
@@ -472,7 +475,7 @@ grep -Fq 'NixOS toplevel evaluation failed for host tonelico.' \
     exit 1
 }
 if timeout 120 nix eval --offline --no-write-lock-file --raw \
-    '/etc/nixos#tonelico.config.system.build.toplevel.outPath' \
+    'path:/etc/nixos#tonelico.config.system.build.toplevel.outPath' \
     > "$scratch/old-selector.out" 2> "$scratch/old-selector.err"; then
     printf 'Historical selector without nixosConfigurations unexpectedly evaluated\n' >&2
     exit 1

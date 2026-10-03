@@ -2,7 +2,7 @@
 
 set -uo pipefail
 
-SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
 # shellcheck source=lib/common.sh
 . "$SCRIPT_DIR/lib/common.sh"
 
@@ -40,8 +40,9 @@ fi
 start_log "update-and-push"
 acquire_maintenance_lock
 TOTAL=8
+[ "$check_only" -eq 0 ] || TOTAL=4
 
-printf 'Preparing a safe update and GitHub backup.\n\n'
+show_banner 'NixOS update and GitHub backup' 'Preflight -> verify system -> snapshot -> review publication -> commit -> verify push'
 printf 'Live progress will be shown below; full output is also saved to:\n  %s\n\n' \
     "$LOG_FILE"
 
@@ -163,15 +164,23 @@ for required_path in nixos baby-step dotfiles scripts; do
     [ -d "$BACKUP_REPO/$required_path" ] ||
         fatal "Required repository path is missing: $required_path"
 done
+publication_paths=(nixos baby-step dotfiles scripts docs README.md .gitignore)
+for optional_path in installation wallpapers .gitattributes; do
+    if [ -e "$BACKUP_REPO/$optional_path" ]; then
+        publication_paths+=("$optional_path")
+    fi
+done
 if ! git -C "$BACKUP_REPO" add --dry-run -A -- \
-    nixos baby-step dotfiles scripts docs README.md .gitignore >> "$LOG_FILE" 2>&1; then
+    "${publication_paths[@]}" >> "$LOG_FILE" 2>&1; then
     fatal "Repository staging paths could not be validated"
 fi
 
 if [ "$check_only" -eq 1 ]; then
-    if ! "$SCRIPT_DIR/update-system.sh" --check-only >> "$LOG_FILE" 2>&1; then
+    show_step 4 "$TOTAL" 'Checking update prerequisites without updating'
+    if ! run_logged 'Update prerequisite check' "$SCRIPT_DIR/update-system.sh" --check-only; then
         fatal "System update safety checks failed"
     fi
+    show_ok
     printf '\nSUCCESS: Update-and-push safety checks passed.\n'
     printf 'No system configuration or packages were changed. Nothing was committed or pushed.\n'
     printf 'Only maintenance log and state files were updated.\n'
@@ -187,8 +196,8 @@ if [ "$backup_only" -eq 1 ]; then
     active_system="$(readlink -f /run/current-system)" || fatal "Could not identify the active system"
     [ "$source_system" = "$active_system" ] ||
         fatal "The declared configuration differs from the active system; build and activate it before --backup-only"
-    "$SCRIPT_DIR/check-system.sh" 2>&1 | tee -a "$LOG_FILE"
-    health_status=${PIPESTATUS[0]}
+    health_status=0
+    run_logged 'Pre-publication health check' "$SCRIPT_DIR/check-system.sh" || health_status=$?
     case "$health_status" in
         0) show_ok ;;
         1) show_warning ;;
@@ -245,7 +254,7 @@ fi
 
 show_step 6 "$TOTAL" "Staging and inspecting safe repository paths"
 if ! git -C "$BACKUP_REPO" add -A -- \
-    nixos baby-step dotfiles scripts docs README.md .gitignore >> "$LOG_FILE" 2>&1; then
+    "${publication_paths[@]}" >> "$LOG_FILE" 2>&1; then
     show_failed
     fatal "Could not stage the configuration snapshot"
 fi
@@ -276,7 +285,7 @@ printf '\nNothing has been committed or pushed yet.\n'
 printf 'Type PUSH and press Enter to continue, or press Enter to stop: '
 read -r confirmation
 if [ "$confirmation" != "PUSH" ]; then
-    printf '\nStopped safely. The system update remains active.\n'
+    printf '\nStopped safely. Any completed system activation remains in place.\n'
     printf 'The repository changes remain local and can be reviewed later.\n'
     exit 0
 fi

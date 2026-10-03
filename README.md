@@ -1,63 +1,61 @@
-# Tonelico reproducible NixOS configuration
+# Tonelico · NixOS desktop & live-USB restore
 
-This repository backs up and deploys the NixOS system used by `aesc`. The
-canonical deployable flake is in [`nixos/`](nixos/), not at repository root.
+A pinned NixOS desktop for **aesc**: Niri, Sway, Mango, Hyprland, KDE Plasma, GNOME and XFCE, Noctalia, Fcitx5 Lotus, development tools, and the declared agent services.
 
-The repository is arranged for multiple machines:
+**Start here:** [Live-USB installation](docs/LIVE-USB-INSTALL.md) · [Maintenance commands](baby-step/README.txt) · [Wallpapers](wallpapers/)
 
-```text
-nixos/
-  flake.nix                     shared flake and automatic host discovery
-  flake.lock                    pinned input versions
-  configuration.nix            portable system configuration
-  apps-and-lotus.nix            shared applications and Fcitx5 Lotus
-  desktop/                      Mango, Niri, Sway, Hyprland, Plasma, GNOME, and XFCE integration
-  fonts/                        declarative local fonts
-  hosts/
-    tonelico/
-      host.nix                  flake name, hostname, platform, user metadata
-      hardware-configuration.nix generated for this physical installation
-      default.nix               Tonelico-only Intel/hardware tuning
-dotfiles/                       selected restorable user configuration
-baby-step/                      beginner-safe maintenance tools
-scripts/bootstrap-nixos.sh      safe deployment and installation helper
-docs/MIGRATION-INSTALL.md       complete beginner migration guide
+| Path | Purpose |
+| --- | --- |
+| [`installation/`](installation/) | Reviewed desktop source for a fresh install; no saved laptop recovery-generation pins |
+| [`scripts/install-from-live-usb.py`](scripts/install-from-live-usb.py) | Explicit inspect → prepare → build → install → password → verify phases |
+| [`scripts/bootstrap-nixos.sh`](scripts/bootstrap-nixos.sh) | Host/hardware import, recoverable configuration deployment and selected user-file restore |
+| [`dotfiles/`](dotfiles/) | Selected desktop settings and manifest-approved service code; credentials excluded |
+| [`baby-step/`](baby-step/) | Maintenance commands with stages, live output, exit codes, private logs and isolated tests |
+| [`wallpapers/`](wallpapers/) | All 30 original images, approximately 100 MiB; restored into `~/Pictures/Wallpapers` |
+| [`nixos/`](nixos/) | Original configuration/history; the installer uses the reviewed `installation/` subtree |
+
+## From the NixOS live USB
+
+Boot in **UEFI mode**, choose and mount your installation root at `/mnt` and its EFI partition at `/mnt/boot`. The helper **does not partition or format disks**, reboot, or switch the live system. This snapshot targets the current Intel x86_64 laptop and user `aesc` (UID 1000); it is not a universal hardware image.
+
+```bash
+nix-shell -p git python3
+git clone https://github.com/Roshrak/nixos-config.git
+cd nixos-config
+python3 scripts/install-from-live-usb.py --phase inspect
+sudo "$(command -v python3)" scripts/install-from-live-usb.py --phase prepare
+sudo "$(command -v python3)" scripts/install-from-live-usb.py --phase build
+sudo "$(command -v python3)" scripts/install-from-live-usb.py --phase install
+sudo "$(command -v python3)" scripts/install-from-live-usb.py --phase password
+sudo "$(command -v python3)" scripts/install-from-live-usb.py --phase verify
 ```
 
-Start with [`docs/MIGRATION-INSTALL.md`](docs/MIGRATION-INSTALL.md). The intended
-workflow is:
+`prepare` generates **fresh hardware configuration**; no old disk UUIDs are reused. `build` records the exact output; `install` checks that source and mount identities still match before installing it. `password` sets the login password interactively without saving it in a log. Detailed preparation, failure recovery and limitations are in the [installation guide](docs/LIVE-USB-INSTALL.md).
 
-```text
-clone repository
-→ generate/import hardware-configuration.nix
-→ run scripts/bootstrap-nixos.sh
-→ build/switch or nixos-install
+## On the installed desktop
+
+```bash
+~/baby-step/check-system.sh
+~/baby-step/rebuild-system.sh --build-only
+~/baby-step/update-system.sh --check-only
+~/baby-step/run-tests.sh --quick
 ```
 
-The current host remains intentionally unusual:
+Run maintenance as your normal user. A private source pointer selects `/etc/nixos` on fresh installs and `/etc/nixos/gen129-recovery` on the recovered laptop. Explicit `path:` flake references include required new files without staging unrelated Git work.
 
-- hostname: `tonelico-nix`
-- flake attribute: `tonelico`
-- explicit target: `/etc/nixos#tonelico`
+`autosleep on` selects lock/display-off after five minutes of inactivity while applications remain running; `autosleep off` disables idle display-off. Overview bindings are `Super+O` and `Super+Shift+middle-click` in the configured sessions. Automated source/build tests verify integration; physical shortcuts, actual idle/lock behavior and subjective visual acceptance still need desktop acceptance.
 
-Never assume the hostname is also the flake attribute.
+Publication and backup tools preserve existing Git work and scan approved source paths. Cloud wallpaper transfer uses `rclone copy` rather than deleting destination-only files. Read [custom-service restore boundaries](docs/CUSTOM-SERVICE-RESTORE.md) before restoring agents.
 
-Maintain an installed machine using `~/baby-step/check-system.sh`,
-`~/baby-step/rebuild-system.sh`, or `~/baby-step/update-system.sh`.
-Use `~/baby-step/update-and-push.sh --backup-only` to publish the already-active
-configuration without upgrading inputs or packages. The default invocation
-updates the system first. Both publication modes request snapshot and push
-review, reject existing staged work, and scan the complete staged tree.
+## Wallpaper previews
 
-The two older `scripts/update-system-and-push*.sh` entry points now forward to
-the maintained baby-step tool; their old `--sync-only` option means
-`--backup-only`. Historical rice/command guides are reference records and do
-not supersede the current maintenance commands.
+<p>
+  <img src="wallpapers/tree.jpg" width="290" alt="Tree wallpaper">
+  <img src="wallpapers/nix.png" width="290" alt="Nix wallpaper">
+</p>
 
-Clipboard history, catalog/cache metadata, maintenance logs, receipts, and
-recovery copies are excluded from publication. Custom Hermes backup is limited
-to the manifest-approved code and unit files; authentication state is excluded.
-Read [`docs/CUSTOM-SERVICE-RESTORE.md`](docs/CUSTOM-SERVICE-RESTORE.md) for the
-restore boundary and [`docs/PUBLICATION-REVIEW.md`](docs/PUBLICATION-REVIEW.md)
-for the latest publication review. Automated build/parser checks do not prove
-desktop, portal, microphone, or reboot behavior.
+[Browse the complete folder](wallpapers/). Images retain their original filenames and bytes. This repository does not grant ownership or a new license to third-party artwork.
+
+## What a restore does and does not include
+
+The clone contains the declared system, selected dotfiles, scripts, fonts, wallpaper assets and approved custom-service source. It does not contain Telegram/API tokens, browser cookies, passwords, private keys, personal documents, VM disks or the entire home directory. Agent credentials and any omitted application data need their own private restore. A successful build is not proof of a successful cold boot, working screen sharing or physical hardware behavior.

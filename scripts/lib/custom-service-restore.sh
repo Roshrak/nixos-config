@@ -5,8 +5,44 @@
 # which the bootstrap entry point defines after its disposable/live target is
 # selected; fixture tests provide their own confined adapter.
 
+_CUSTOM_RESTORE_LIBRARY_DIR="${BASH_SOURCE[0]%/*}"
+custom_restore_public_contract() {
+    local library_dir contract
+    library_dir="$(CDPATH= cd -- "$_CUSTOM_RESTORE_LIBRARY_DIR" && pwd -P)" || return 1
+    contract="$library_dir/../../baby-step/lib/custom-service-manifest.json"
+    [ -f "$contract" ] && [ ! -L "$contract" ] && [ -r "$contract" ] || return 1
+    jq -e '.schema_version == 1 and (.public_files | type == "array") and (.public_files | length == 6) and
+      (.public_files | map(.path) | length == (unique | length)) and
+      all(.public_files[]; (.path | test("^\\.hermes/(agy_bridge\\.py|scripts/clean-system(\\.py|\\.job\\.json)|plugins/human-stage-policy/(__init__\\.py|plugin\\.yaml)|skills/human-controlled-project-stages/SKILL\\.md)$")) and
+        (.origin == "home" or .origin == "repository") and
+        (.kind == "code" or .kind == "retained") and
+        (.restore | type == "boolean") and (.mode | test("^0[0-7]{3}$")))' "$contract" >/dev/null || return 1
+    printf '%s\n' "$contract"
+}
+custom_restore_helper_selection() {
+    local contract row
+    contract="$(custom_restore_public_contract)" || return 1
+    row="$(jq -r --arg path "${CUSTOM_RESTORE_HELPER_RELATIVE:-.hermes/agy_bridge.py}" '.public_files[] | select(.path == $path and .restore == true) | [.path,.mode,.recovery] | @tsv' "$contract")" || return 1
+    [ -n "$row" ] || return 1
+    printf '%s\n' "$row"
+}
+
 custom_restore_error() {
     printf 'Custom-service restore: %s\n' "$*" >&2
+}
+
+# Identify the exact regular-file object at a path. Metadata is sampled on
+# both sides of the content hash so a concurrent replacement or write cannot
+# produce a mixed receipt identity.
+custom_restore_file_identity() {
+    if [ "$#" -ne 1 ]; then return 2; fi
+    local path="$1" before after digest
+    [ -f "$path" ] && [ ! -L "$path" ] || return 1
+    before="$(stat -c '%a|%u:%g|%d:%i' -- "$path")" || return 1
+    digest="$(sha256sum -- "$path" | awk '{print $1}')" || return 1
+    after="$(stat -c '%a|%u:%g|%d:%i' -- "$path")" || return 1
+    [ -f "$path" ] && [ ! -L "$path" ] && [ "$before" = "$after" ] || return 1
+    printf 'regular|%s|%s\n' "$digest" "$after"
 }
 
 custom_restore_safe_path() {
@@ -207,23 +243,29 @@ custom_restore_validate_tree_types() {
 
 custom_restore_validate_repository_private_content() {
     if [ "$#" -ne 1 ]; then return 2; fi
-    local repo_root="$1" hermes_dir="$1/dotfiles/.hermes" entry name listing
+    local repo_root="$1" hermes_dir="$1/dotfiles/.hermes" entry relative listing contract paths approved parent
     custom_restore_safe_path "$repo_root" 0 || return 1
     custom_restore_safe_path "$hermes_dir" 1 || return 1
     [ -e "$hermes_dir" ] || return 0
-    [ -d "$hermes_dir" ] && [ ! -L "$hermes_dir" ] || {
-        custom_restore_error "repository .hermes path is not a real directory: $hermes_dir"
-        return 1
-    }
+    [ -d "$hermes_dir" ] && [ ! -L "$hermes_dir" ] || return 1
+    contract="$(custom_restore_public_contract)" || { custom_restore_error 'public source contract unavailable'; return 1; }
+    paths="$(jq -r '.public_files[].path' "$contract")" || return 1
     listing="$(mktemp "${CUSTOM_RESTORE_PREFLIGHT_DIR:-/tmp}/.hermes-entries.XXXXXX")" || return 1
     if ! find -P "$hermes_dir" -mindepth 1 -print0 > "$listing"; then
-        rm -f -- "$listing"
-        custom_restore_error "could not enumerate repository .hermes content: $hermes_dir"
-        return 1
+        rm -f -- "$listing"; return 1
     fi
     while IFS= read -r -d '' entry; do
-        name="${entry##*/}"
-        if [ "$name" != agy_bridge.py ] || [ ! -f "$entry" ] || [ -L "$entry" ]; then
+        relative=".hermes/${entry#"$hermes_dir/"}"; approved=0
+        if [ -f "$entry" ] && [ ! -L "$entry" ]; then
+            while IFS= read -r parent; do
+                [ "$relative" != "$parent" ] || approved=1
+            done <<< "$paths"
+        elif [ -d "$entry" ] && [ ! -L "$entry" ]; then
+            while IFS= read -r parent; do
+                case "$parent" in "$relative"/*) approved=1 ;; esac
+            done <<< "$paths"
+        fi
+        if [ "$approved" -ne 1 ]; then
             rm -f -- "$listing"
             custom_restore_error "repository copy contains unmanifested private Hermes data: $entry"
             return 1
@@ -291,7 +333,9 @@ preflight_custom_service_restore() (
     local manifest="$1" dotfiles="$2" target_home="$3" expected_uid="$4" expected_gid="$5"
     local source_relative backup_relative kind extra source_path
     local hermes_dir="$target_home/.hermes" helper="$target_home/.hermes/agy_bridge.py"
-    local uid_seen=0 chat_seen=0 hermes_unit_seen=0 chat_unit_seen=0
+    local uid_seen=0 chat_seen=0 hermes_unit_seen=0 chat_unit_seen=0 contract row relative destination parent
+    local -A public_seen=()
+    contract="$(custom_restore_public_contract)" || { custom_restore_error "public source contract unavailable"; exit 1; }
     [[ "$expected_uid" =~ ^[0-9]+$ && "$expected_gid" =~ ^[0-9]+$ ]] || {
         custom_restore_error 'target UID/GID must be decimal numbers'
         exit 1
@@ -333,8 +377,10 @@ preflight_custom_service_restore() (
                 chat_unit_seen=1
                 ;;
             *)
-                custom_restore_error 'manifest contains an unapproved mapping'
-                exit 1
+                [ "$source_relative" = "$backup_relative" ] || { custom_restore_error 'manifest contains an unapproved mapping'; exit 1; }
+                row="$(jq -r --arg p "$source_relative" --arg k "$kind" '.public_files[] | select(.path == $p and .kind == $k) | .path' "$contract")" || exit 1
+                [ -n "$row" ] && [ -z "${public_seen[$row]:-}" ] || { custom_restore_error 'manifest contains an unapproved or duplicate mapping'; exit 1; }
+                public_seen["$row"]=1
                 ;;
         esac
         source_path="$dotfiles/$source_relative"
@@ -346,6 +392,29 @@ preflight_custom_service_restore() (
         custom_restore_error 'manifest must contain each of the four approved entries once'
         exit 1
     fi
+
+    if grep -Fxq '# public-source-contract=v2' "$manifest"; then
+        while IFS= read -r relative; do
+            [ "$relative" = .hermes/agy_bridge.py ] || [ "${public_seen[$relative]:-}" = 1 ] || {
+                custom_restore_error "required public source omitted: $relative"; exit 1;
+            }
+        done <<< "$(jq -r '.public_files[].path' "$contract")"
+    fi
+    # Every selected runtime file is preflighted before any write. Retained
+    # plugin/skill files are repository-only and are never activated here.
+    while IFS=$'\t' read -r relative kind; do
+        if grep -Fxq "$relative"$'\t'"$relative"$'\t'"$kind" "$manifest"; then
+            destination="$target_home/$relative"
+            custom_restore_safe_path "$destination" 1 || exit 1
+            parent="${destination%/*}"
+            if [ -e "$parent" ]; then
+                [ -d "$parent" ] && [ ! -L "$parent" ] && [ "$(stat -c '%u:%g' -- "$parent")" = "$expected_uid:$expected_gid" ] || exit 1
+            fi
+            if [ -e "$destination" ] || [ -L "$destination" ]; then
+                [ -f "$destination" ] && [ ! -L "$destination" ] && [ "$(stat -c '%u:%g' -- "$destination")" = "$expected_uid:$expected_gid" ] || exit 1
+            fi
+        fi
+    done <<< "$(jq -r '.public_files[] | select(.restore == true) | [.path,.kind] | @tsv' "$contract")"
 
     if [ -e "$target_home" ] || [ -L "$target_home" ]; then
         [ -d "$target_home" ] && [ ! -L "$target_home" ] || {
@@ -379,7 +448,7 @@ preflight_custom_service_restore() (
     fi
 )
 
-restore_hermes_bridge() (
+_custom_restore_single_public_helper() (
     set -euo pipefail
     if [ "$#" -ne 6 ]; then
         custom_restore_error 'usage: restore_hermes_bridge MANIFEST DOTFILES TARGET_HOME RECOVERY_ROOT UID GID'
@@ -387,11 +456,16 @@ restore_hermes_bridge() (
     fi
     local manifest="$1" dotfiles="$2" target_home="$3" recovery_root="$4"
     local target_uid="$5" target_gid="$6"
-    local source="$dotfiles/.hermes/agy_bridge.py"
-    local hermes_dir="$target_home/.hermes" destination="$target_home/.hermes/agy_bridge.py"
-    local entry="$recovery_root/hermes-bridge" previous="$recovery_root/hermes-bridge/previous"
-    local state_file="$recovery_root/hermes-bridge/prior-state.txt"
+    local helper_relative helper_mode helper_recovery selection
+    selection="$(custom_restore_helper_selection)" || exit 1
+    IFS=$'\t' read -r helper_relative helper_mode helper_recovery <<< "$selection"
+    local source="$dotfiles/$helper_relative"
+    local hermes_dir="$target_home/${helper_relative%/*}" destination="$target_home/$helper_relative"
+    local entry="$recovery_root/$helper_recovery" previous="$recovery_root/$helper_recovery/previous"
+    local state_file="$recovery_root/$helper_recovery/prior-state.txt"
+    local lock_file="$recovery_root/$helper_recovery/transaction.lock"
     local temp_file="" temp_identity="" restore_temp="" restore_temp_identity=""
+    local receipt_temp="" installed_identity="" transaction_id="" transaction_lock_fd
     local committed_identity="" current_identity="" source_hash temp_hash previous_hash
     local hermes_dir_was_present=0 had_previous=0 committed=0 commit_uncertain=0
     local previous_mode previous_owner hermes_dir_mode="" hermes_dir_owner=""
@@ -402,7 +476,7 @@ restore_hermes_bridge() (
     source_hash="$(sha256sum -- "$source" | awk '{print $1}')" || exit 1
     if [ -f "$destination" ] &&
        [ "$(sha256sum -- "$destination" | awk '{print $1}')" = "$source_hash" ] &&
-       [ "$(stat -c '%a:%u:%g' -- "$destination")" = "644:$target_uid:$target_gid" ]; then
+       [ "$(stat -c '%a:%u:%g' -- "$destination")" = "${helper_mode#0}:$target_uid:$target_gid" ]; then
         printf 'Hermes helper already matches source and ownership: %s\n' "$destination"
         exit 0
     fi
@@ -427,6 +501,20 @@ restore_hermes_bridge() (
         "$target_uid" "$target_gid" || exit 1
     custom_restore_ensure_private_directory "$entry" \
         "$target_uid" "$target_gid" || exit 1
+    run_root install -m 0600 /dev/null "$lock_file" || exit 1
+    run_root chown "$target_uid:$target_gid" "$lock_file" || exit 1
+    [ -f "$lock_file" ] && [ ! -L "$lock_file" ] &&
+        [ "$(stat -c '%a:%u:%g' -- "$lock_file")" = "600:$target_uid:$target_gid" ] || {
+            custom_restore_error 'could not create a private transaction lock'
+            exit 1
+        }
+    exec {transaction_lock_fd}<>"$lock_file" || exit 1
+    flock -x "$transaction_lock_fd" || exit 1
+    transaction_id="$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')" || exit 1
+    [[ "$transaction_id" =~ ^[[:xdigit:]]{32}$ ]] || {
+        custom_restore_error 'could not create a valid transaction identifier'
+        exit 1
+    }
     if [ "$had_previous" -eq 1 ]; then
         run_root cp -a -- "$destination" "$previous" || exit 1
         previous_mode="$(stat -c '%a' -- "$destination")" || exit 1
@@ -441,16 +529,19 @@ restore_hermes_bridge() (
             custom_restore_error 'recovery copy did not preserve prior helper metadata'
             exit 1
         }
-        printf 'present=1\nsha256=%s\nmode=%s\nowner=%s\nhermes_dir_present=1\nhermes_dir_mode=%s\nhermes_dir_owner=%s\n' \
+        printf 'schema_version=2\ntransaction_id=%s\ncommit_state=prepared\npresent=1\nsha256=%s\nmode=%s\nowner=%s\nhermes_dir_present=1\nhermes_dir_mode=%s\nhermes_dir_owner=%s\n' \
+            "$transaction_id" \
             "$previous_hash" "$previous_mode" "$previous_owner" \
             "$hermes_dir_mode" "$hermes_dir_owner" |
             run_root tee -- "$state_file" > /dev/null || exit 1
     elif [ "$hermes_dir_was_present" -eq 1 ]; then
-        printf 'present=0\nhermes_dir_present=1\nhermes_dir_mode=%s\nhermes_dir_owner=%s\n' \
+        printf 'schema_version=2\ntransaction_id=%s\ncommit_state=prepared\npresent=0\nhermes_dir_present=1\nhermes_dir_mode=%s\nhermes_dir_owner=%s\n' \
+            "$transaction_id" \
             "$hermes_dir_mode" "$hermes_dir_owner" |
             run_root tee -- "$state_file" > /dev/null || exit 1
     else
-        printf 'present=0\nhermes_dir_present=0\n' |
+        printf 'schema_version=2\ntransaction_id=%s\ncommit_state=prepared\npresent=0\nhermes_dir_present=0\n' \
+            "$transaction_id" |
             run_root tee -- "$state_file" > /dev/null || exit 1
     fi
     run_root chmod 0600 "$state_file" || exit 1
@@ -598,9 +689,9 @@ restore_hermes_bridge() (
         rollback_transaction || custom_restore_error 'rollback after staging identity failure was incomplete'
         exit 1
     }
-    if ! run_root install -m 0644 -- "$source" "$temp_file" ||
+    if ! run_root install -m "$helper_mode" -- "$source" "$temp_file" ||
        ! run_root chown "$target_uid:$target_gid" "$temp_file" ||
-       ! run_root chmod 0644 "$temp_file"; then
+       ! run_root chmod "$helper_mode" "$temp_file"; then
         rollback_transaction || custom_restore_error 'rollback after staging failure was incomplete'
         custom_restore_error 'could not prepare the exact helper bytes and ownership'
         exit 1
@@ -676,27 +767,80 @@ restore_hermes_bridge() (
     fi
 
     if [ "$(sha256sum -- "$destination" | awk '{print $1}')" != "$source_hash" ] ||
-       [ "$(stat -c '%a:%u:%g' -- "$destination")" != "644:$target_uid:$target_gid" ]; then
+       [ "$(stat -c '%a:%u:%g' -- "$destination")" != "${helper_mode#0}:$target_uid:$target_gid" ]; then
         rollback_transaction || custom_restore_error 'post-commit rollback was incomplete'
         custom_restore_error 'committed helper failed hash, mode, or ownership verification'
         exit 1
     fi
+    installed_identity="$(custom_restore_file_identity "$destination")" || {
+        rollback_transaction || custom_restore_error 'rollback after committed identity capture was incomplete'
+        custom_restore_error 'could not capture a stable committed helper identity'
+        exit 1
+    }
+    if ! receipt_temp="$(run_root mktemp -p "$entry" '.prior-state.commit.XXXXXX')"; then
+        rollback_transaction || custom_restore_error 'rollback after receipt staging failure was incomplete'
+        custom_restore_error "could not stage the committed transaction receipt; recovery retained at $previous"
+        exit 1
+    fi
+    if ! { run_root sed '/^commit_state=/d' "$state_file" || exit 1
+           printf 'commit_state=committed\ninstalled_identity=%s\n' "$installed_identity"; } |
+         run_root tee -- "$receipt_temp" > /dev/null; then
+        rollback_transaction || custom_restore_error 'rollback after receipt write failure was incomplete'
+        custom_restore_error "could not write the committed transaction receipt; recovery retained at $previous"
+        exit 1
+    fi
+    run_root chmod 0600 "$receipt_temp" || {
+        rollback_transaction || custom_restore_error 'rollback after receipt mode failure was incomplete'
+        exit 1
+    }
+    run_root chown "$target_uid:$target_gid" "$receipt_temp" || {
+        rollback_transaction || custom_restore_error 'rollback after receipt ownership failure was incomplete'
+        exit 1
+    }
+    [ -f "$receipt_temp" ] && [ ! -L "$receipt_temp" ] &&
+        [ "$(stat -c '%a:%u:%g' -- "$receipt_temp")" = "600:$target_uid:$target_gid" ] &&
+        grep -Fxq 'commit_state=committed' "$receipt_temp" &&
+        grep -Fxq "installed_identity=$installed_identity" "$receipt_temp" || {
+            rollback_transaction || custom_restore_error 'rollback after receipt verification failure was incomplete'
+            custom_restore_error 'committed transaction receipt failed verification'
+            exit 1
+        }
+    run_root mv -T -- "$receipt_temp" "$state_file" || {
+        rollback_transaction || custom_restore_error 'rollback after receipt publication failure was incomplete'
+        custom_restore_error "could not publish the committed transaction receipt; recovery retained at $previous"
+        exit 1
+    }
+    receipt_temp=""
+    [ "$(stat -c '%a:%u:%g' -- "$state_file")" = "600:$target_uid:$target_gid" ] &&
+        grep -Fxq 'commit_state=committed' "$state_file" &&
+        grep -Fxq "installed_identity=$installed_identity" "$state_file" || {
+            rollback_transaction || custom_restore_error 'rollback after published receipt verification failure was incomplete'
+            custom_restore_error 'published transaction receipt failed verification'
+            exit 1
+        }
     printf 'Hermes helper restored atomically: %s (sha256 %s)\n' "$destination" "$source_hash"
 )
 
-rollback_hermes_bridge() (
+_custom_rollback_single_public_helper() (
     set -euo pipefail
     if [ "$#" -ne 4 ]; then
         custom_restore_error 'usage: rollback_hermes_bridge RECOVERY_ROOT TARGET_HOME UID GID'
         exit 2
     fi
     local recovery_root="$1" target_home="$2" target_uid="$3" target_gid="$4"
-    local entry="$recovery_root/hermes-bridge" state_file="$recovery_root/hermes-bridge/prior-state.txt"
-    local previous="$recovery_root/hermes-bridge/previous"
-    local hermes_dir="$target_home/.hermes" destination="$target_home/.hermes/agy_bridge.py"
+    local helper_relative helper_mode helper_recovery selection
+    selection="$(custom_restore_helper_selection)" || exit 1
+    IFS=$'\t' read -r helper_relative helper_mode helper_recovery <<< "$selection"
+    local entry="$recovery_root/$helper_recovery" state_file="$recovery_root/$helper_recovery/prior-state.txt"
+    local previous="$recovery_root/$helper_recovery/previous"
+    local lock_file="$recovery_root/$helper_recovery/transaction.lock"
+    local hermes_dir="$target_home/${helper_relative%/*}" destination="$target_home/$helper_relative"
+    local quarantine="" installed_identity="" schema_version="" transaction_id="" commit_state=""
     local state_present state_dir_present previous_hash previous_mode previous_owner
-    local prior_dir_mode="" prior_dir_owner="" current_owner temp_file="" marker_temp=""
-    local marker="$recovery_root/hermes-bridge/rolled-back"
+    local prior_dir_mode="" prior_dir_owner="" current_owner current_identity=""
+    local quarantine_identity="" temp_file="" temp_identity="" marker_temp="" marker_temp_identity=""
+    local marker="$recovery_root/$helper_recovery/rolled-back"
+    local transaction_lock_fd
     [[ "$target_uid" =~ ^[0-9]+$ && "$target_gid" =~ ^[0-9]+$ ]] || {
         custom_restore_error 'target UID/GID must be decimal numbers'
         exit 1
@@ -713,6 +857,16 @@ rollback_hermes_bridge() (
             custom_restore_error "prior-state record is missing or unsafe: $state_file"
             exit 1
         }
+    [ -f "$lock_file" ] && [ ! -L "$lock_file" ] &&
+        [ "$(stat -c '%u:%a' -- "$lock_file")" = "$target_uid:600" ] || {
+            custom_restore_error 'transaction lock is missing or unsafe; refusing legacy rollback'
+            exit 1
+        }
+    exec {transaction_lock_fd}<>"$lock_file" || exit 1
+    flock -x "$transaction_lock_fd" || {
+        custom_restore_error 'could not acquire the transaction rollback lock'
+        exit 1
+    }
     if [ -e "$marker" ] || [ -L "$marker" ]; then
         [ -f "$marker" ] && [ ! -L "$marker" ] &&
             [ "$(stat -c '%u:%a' -- "$marker")" = "$target_uid:600" ] &&
@@ -725,9 +879,9 @@ rollback_hermes_bridge() (
     fi
     if ! awk -F= '
         NF != 2 { exit 1 }
-        $1 !~ /^(present|sha256|mode|owner|hermes_dir_present|hermes_dir_mode|hermes_dir_owner)$/ { exit 1 }
+        $1 !~ /^(schema_version|transaction_id|commit_state|present|sha256|mode|owner|hermes_dir_present|hermes_dir_mode|hermes_dir_owner|installed_identity)$/ { exit 1 }
         seen[$1]++ { exit 1 }
-        END { if (NR < 2) exit 1 }
+        END { if (NR < 6) exit 1 }
     ' "$state_file"; then
         custom_restore_error 'prior-state record is malformed or contains duplicate fields'
         exit 1
@@ -736,11 +890,25 @@ rollback_hermes_bridge() (
         awk -F= -v key="$1" '$1 == key { print substr($0, index($0, "=") + 1); count++ }
             END { if (count != 1) exit 1 }' "$state_file"
     }
+    schema_version="$(state_value schema_version)" || exit 1
+    transaction_id="$(state_value transaction_id)" || exit 1
+    commit_state="$(state_value commit_state)" || exit 1
+    installed_identity="$(state_value installed_identity)" || {
+        custom_restore_error 'legacy or incomplete receipt has no committed object identity; preserving target and before-image'
+        exit 1
+    }
+    [[ "$schema_version" = 2 &&
+       "$transaction_id" =~ ^[[:xdigit:]]{32}$ &&
+       "$commit_state" = committed &&
+       "$installed_identity" =~ ^regular\|[[:xdigit:]]{64}\|[0-7]{3,4}\|[0-9]+:[0-9]+\|[0-9]+:[0-9]+$ ]] || {
+        custom_restore_error 'legacy, uncommitted, or malformed transaction receipt; preserving target and before-image'
+        exit 1
+    }
     state_present="$(state_value present)" || exit 1
     state_dir_present="$(state_value hermes_dir_present)" || exit 1
     case "$state_present|$state_dir_present" in
         '1|1')
-            [ "$(awk 'END { print NR }' "$state_file")" -eq 7 ] || {
+            [ "$(awk 'END { print NR }' "$state_file")" -eq 11 ] || {
                 custom_restore_error 'present-helper recovery record has an unexpected field count'
                 exit 1
             }
@@ -769,13 +937,13 @@ rollback_hermes_bridge() (
                 }
             ;;
         '0|0')
-            [ "$(awk 'END { print NR }' "$state_file")" -eq 2 ] || {
+            [ "$(awk 'END { print NR }' "$state_file")" -eq 6 ] || {
                 custom_restore_error 'absent-helper recovery record has an unexpected field count'
                 exit 1
             }
             ;;
         '0|1')
-            [ "$(awk 'END { print NR }' "$state_file")" -eq 4 ] || {
+            [ "$(awk 'END { print NR }' "$state_file")" -eq 8 ] || {
                 custom_restore_error 'preexisting-directory recovery record has an unexpected field count'
                 exit 1
             }
@@ -804,55 +972,139 @@ rollback_hermes_bridge() (
             exit 1
         }
     custom_restore_safe_path "$hermes_dir" 1 || exit 1
-    if [ -e "$destination" ] || [ -L "$destination" ]; then
-        [ -f "$destination" ] && [ ! -L "$destination" ] &&
-            [ "$(stat -c '%u:%g' -- "$destination")" = "$target_uid:$target_gid" ] || {
-                custom_restore_error 'Hermes helper changed type or ownership before rollback'
-                exit 1
-            }
-    fi
     if [ -e "$hermes_dir" ] || [ -L "$hermes_dir" ]; then
         [ -d "$hermes_dir" ] && [ ! -L "$hermes_dir" ] &&
             [ "$(stat -c '%u:%g' -- "$hermes_dir")" = "$target_uid:$target_gid" ] || {
                 custom_restore_error '.hermes changed ownership or type before rollback'
                 exit 1
             }
+        if [ "$state_dir_present" -eq 1 ] &&
+           [ "$(stat -c '%a:%u:%g' -- "$hermes_dir")" != "$prior_dir_mode:$prior_dir_owner" ]; then
+            custom_restore_error 'preexisting .hermes directory metadata changed'
+            exit 1
+        fi
     elif [ "$state_dir_present" -eq 1 ]; then
-        run_root install -d -m "$prior_dir_mode" "$hermes_dir" || exit 1
-        run_root chown "$prior_dir_owner" "$hermes_dir" || exit 1
+        custom_restore_error 'preexisting .hermes directory disappeared before rollback'
+        exit 1
     fi
 
-    trap 'if [ -n "$temp_file" ] && { [ -e "$temp_file" ] || [ -L "$temp_file" ]; }; then run_root rm -f -- "$temp_file"; fi; if [ -n "$marker_temp" ] && { [ -e "$marker_temp" ] || [ -L "$marker_temp" ]; }; then run_root rm -f -- "$marker_temp"; fi' EXIT
+    quarantine="$entry/installed-after-rollback-$transaction_id"
+    if [ -e "$quarantine" ] || [ -L "$quarantine" ]; then
+        quarantine_identity="$(custom_restore_file_identity "$quarantine" 2>/dev/null || true)"
+        [ "$quarantine_identity" = "$installed_identity" ] || {
+            custom_restore_error "rollback quarantine changed; preserving it at $quarantine"
+            exit 1
+        }
+    else
+        current_identity="$(custom_restore_file_identity "$destination" 2>/dev/null || true)"
+        [ "$current_identity" = "$installed_identity" ] || {
+            custom_restore_error 'Hermes helper no longer matches the object installed by this transaction; preserving later edits and before-image'
+            exit 1
+        }
+    fi
+
+    trap '
+        if [ -n "$temp_file" ] && { [ -e "$temp_file" ] || [ -L "$temp_file" ]; }; then
+            if [ -f "$temp_file" ] && [ ! -L "$temp_file" ] &&
+               [ "$(stat -c "%d:%i" -- "$temp_file" 2>/dev/null || true)" = "$temp_identity" ]; then
+                run_root rm -f -- "$temp_file"
+            else
+                custom_restore_error "rollback staging path changed; leaving it untouched at $temp_file"
+            fi
+        fi
+        if [ -n "$marker_temp" ] && { [ -e "$marker_temp" ] || [ -L "$marker_temp" ]; }; then
+            if [ -f "$marker_temp" ] && [ ! -L "$marker_temp" ] &&
+               [ "$(stat -c "%d:%i" -- "$marker_temp" 2>/dev/null || true)" = "$marker_temp_identity" ]; then
+                run_root rm -f -- "$marker_temp"
+            else
+                custom_restore_error "rollback marker staging path changed; leaving it untouched at $marker_temp"
+            fi
+        fi
+    ' EXIT
 
     if [ "$state_present" -eq 1 ]; then
-        temp_file="$(run_root mktemp -p "$hermes_dir" '.agy_bridge.py.rollback.XXXXXX')" || exit 1
-        run_root cp -a -- "$previous" "$temp_file" || exit 1
-        [ "$(sha256sum -- "$temp_file" | awk '{print $1}')" = "$previous_hash" ] &&
-            [ "$(stat -c '%a:%u:%g' -- "$temp_file")" = \
-              "$previous_mode:$previous_owner" ] || {
-                run_root rm -f -- "$temp_file"
-                custom_restore_error 'rollback staging failed prior helper verification'
+        current_identity="$(custom_restore_file_identity "$destination" 2>/dev/null || true)"
+        if [ "$current_identity" = "$installed_identity" ]; then
+            temp_file="$(run_root mktemp -p "$hermes_dir" '.agy_bridge.py.rollback.XXXXXX')" || exit 1
+            temp_identity="$(stat -c '%d:%i' -- "$temp_file")" || exit 1
+            run_root cp -a -- "$previous" "$temp_file" || exit 1
+            [ "$(sha256sum -- "$temp_file" | awk '{print $1}')" = "$previous_hash" ] &&
+                [ "$(stat -c '%a:%u:%g' -- "$temp_file")" = \
+                  "$previous_mode:$previous_owner" ] || {
+                    custom_restore_error 'rollback staging failed prior helper verification'
+                    exit 1
+                }
+            if run_root mv -T -n -- "$destination" "$quarantine"; then :; fi
+            quarantine_identity="$(custom_restore_file_identity "$quarantine" 2>/dev/null || true)"
+            if [ "$quarantine_identity" != "$installed_identity" ]; then
+                if [ ! -e "$destination" ] && [ ! -L "$destination" ] &&
+                   { [ -e "$quarantine" ] || [ -L "$quarantine" ]; }; then
+                    if run_root mv -T -n -- "$quarantine" "$destination"; then :; fi
+                fi
+                custom_restore_error 'helper changed during rollback compare; later object and before-image were preserved'
+                exit 1
+            fi
+        fi
+
+        [ -e "$quarantine" ] && [ ! -L "$quarantine" ] &&
+            [ "$(custom_restore_file_identity "$quarantine")" = "$installed_identity" ] || {
+                custom_restore_error 'transaction-installed helper was not safely isolated; preserving recovery data'
                 exit 1
             }
-        run_root mv -T -- "$temp_file" "$destination" || exit 1
-        [ "$(sha256sum -- "$destination" | awk '{print $1}')" = "$previous_hash" ] &&
-            [ "$(stat -c '%a:%u:%g' -- "$destination")" = \
-              "$previous_mode:$previous_owner" ] || {
-                custom_restore_error 'restored previous helper failed verification'
+        if [ -e "$destination" ] || [ -L "$destination" ]; then
+            [ -f "$destination" ] && [ ! -L "$destination" ] &&
+                [ "$(sha256sum -- "$destination" | awk '{print $1}')" = "$previous_hash" ] &&
+                [ "$(stat -c '%a:%u:%g' -- "$destination")" = "$previous_mode:$previous_owner" ] || {
+                    custom_restore_error 'a new destination appeared during rollback; preserving it and the transaction quarantine'
+                    exit 1
+                }
+        else
+            if [ -z "$temp_file" ]; then
+                temp_file="$(run_root mktemp -p "$hermes_dir" '.agy_bridge.py.rollback.XXXXXX')" || exit 1
+                temp_identity="$(stat -c '%d:%i' -- "$temp_file")" || exit 1
+                run_root cp -a -- "$previous" "$temp_file" || exit 1
+            fi
+            if run_root mv -T -n -- "$temp_file" "$destination"; then :; fi
+            if [ -e "$temp_file" ] || [ -L "$temp_file" ]; then
+                custom_restore_error 'rollback publish was blocked by a new destination; preserving both paths'
+                exit 1
+            fi
+            temp_file=""
+            temp_identity=""
+        fi
+        [ -f "$destination" ] && [ ! -L "$destination" ] &&
+            [ "$(sha256sum -- "$destination" | awk '{print $1}')" = "$previous_hash" ] &&
+            [ "$(stat -c '%a:%u:%g' -- "$destination")" = "$previous_mode:$previous_owner" ] || {
+                custom_restore_error 'restored previous helper failed independent verification'
                 exit 1
             }
     else
         if [ -e "$destination" ] || [ -L "$destination" ]; then
-            [ -f "$destination" ] && [ ! -L "$destination" ] || {
-                custom_restore_error 'refusing to remove a changed non-regular helper during rollback'
+            current_identity="$(custom_restore_file_identity "$destination" 2>/dev/null || true)"
+            [ "$current_identity" = "$installed_identity" ] &&
+                [ ! -e "$quarantine" ] && [ ! -L "$quarantine" ] || {
+                    custom_restore_error 'Hermes helper changed after restore; preserving later object and recovery data'
+                    exit 1
+                }
+            if run_root mv -T -n -- "$destination" "$quarantine"; then :; fi
+            quarantine_identity="$(custom_restore_file_identity "$quarantine" 2>/dev/null || true)"
+            if [ "$quarantine_identity" != "$installed_identity" ]; then
+                if [ ! -e "$destination" ] && [ ! -L "$destination" ] &&
+                   { [ -e "$quarantine" ] || [ -L "$quarantine" ]; }; then
+                    if run_root mv -T -n -- "$quarantine" "$destination"; then :; fi
+                fi
+                custom_restore_error 'helper changed during rollback compare; later object was preserved'
+                exit 1
+            fi
+        fi
+        [ -e "$quarantine" ] && [ ! -L "$quarantine" ] &&
+            [ "$(custom_restore_file_identity "$quarantine")" = "$installed_identity" ] || {
+                custom_restore_error 'transaction-installed helper was not safely isolated; preserving recovery data'
                 exit 1
             }
-            current_owner="$(stat -c '%u:%g' -- "$destination")"
-            [ "$current_owner" = "$target_uid:$target_gid" ] || {
-                custom_restore_error 'refusing to remove helper with unexpected ownership during rollback'
-                exit 1
-            }
-            run_root rm -f -- "$destination" || exit 1
+        if [ -e "$destination" ] || [ -L "$destination" ]; then
+            custom_restore_error 'a new helper appeared during rollback; preserving it and the transaction quarantine'
+            exit 1
         fi
     fi
 
@@ -867,19 +1119,62 @@ rollback_hermes_bridge() (
             exit 1
         }
     elif [ -d "$hermes_dir" ]; then
-        run_root rmdir -- "$hermes_dir" || {
-            custom_restore_error 'new .hermes directory contains unrelated files; left it intact'
-            exit 1
-        }
+        if ! run_root rmdir -- "$hermes_dir"; then
+            printf 'Hermes helper rolled back; preserving nonempty .hermes directory: %s\n' \
+                "$hermes_dir" >&2
+        fi
     fi
     marker_temp="$(run_root mktemp -p "$entry" '.rolled-back.XXXXXX')" || exit 1
+    marker_temp_identity="$(stat -c '%d:%i' -- "$marker_temp")" || exit 1
     printf 'rolled-back=1\n' | run_root tee -- "$marker_temp" > /dev/null || exit 1
     run_root chmod 0600 "$marker_temp" || exit 1
     run_root chown "$target_uid:$target_gid" "$marker_temp" || exit 1
-    run_root mv -T -- "$marker_temp" "$marker" || exit 1
+    if run_root mv -T -n -- "$marker_temp" "$marker"; then :; fi
+    if [ -e "$marker_temp" ] || [ -L "$marker_temp" ]; then
+        custom_restore_error 'rollback marker publication was blocked; recovery data remains intact'
+        exit 1
+    fi
     marker_temp=""
+    marker_temp_identity=""
+    [ -f "$marker" ] && [ ! -L "$marker" ] &&
+        [ "$(stat -c '%u:%a' -- "$marker")" = "$target_uid:600" ] &&
+        grep -Fxq 'rolled-back=1' "$marker" || {
+            custom_restore_error 'published rollback marker failed verification'
+            exit 1
+        }
     printf 'Hermes helper transaction rolled back from %s.\n' "$entry"
 )
+
+# Compatibility API: restore the bridge and other explicitly selected runtime
+# files through separate verified transactions. No policy plugin is activated.
+restore_hermes_bridge() {
+    [ "$#" -eq 6 ] || return 2
+    local contract rows relative kind
+    preflight_custom_service_restore "$1" "$2" "$3" "$5" "$6" || return 1
+    contract="$(custom_restore_public_contract)" || return 1
+    rows="$(jq -r '.public_files[] | select(.restore == true) | [.path,.kind] | @tsv' "$contract")" || return 1
+    while IFS=$'\t' read -r relative kind; do
+        if grep -Fxq "$relative"$'\t'"$relative"$'\t'"$kind" "$1"; then
+            if ! CUSTOM_RESTORE_HELPER_RELATIVE="$relative" _custom_restore_single_public_helper "$@"; then
+                custom_restore_error "selected public helper restore incomplete at $relative; prior completed per-file transactions and recovery receipts are retained"
+                return 1
+            fi
+        fi
+    done <<< "$rows"
+}
+rollback_hermes_bridge() {
+    [ "$#" -eq 4 ] || return 2
+    local contract rows relative recovery failed=0
+    contract="$(custom_restore_public_contract)" || return 1
+    rows="$(jq -r '[.public_files[] | select(.restore == true)] | reverse[] | [.path,.recovery] | @tsv' "$contract")" || return 1
+    while IFS=$'\t' read -r relative recovery; do
+        if [ -e "$1/$recovery" ] || [ -L "$1/$recovery" ]; then
+            CUSTOM_RESTORE_HELPER_RELATIVE="$relative" _custom_rollback_single_public_helper "$@" || failed=1
+        fi
+    done <<< "$rows"
+    [ "$failed" -eq 0 ] || return 1
+    [ -d "$1/hermes-bridge" ] || { custom_restore_error 'bridge recovery entry is missing'; return 1; }
+}
 
 custom_restore_entry_tree_digest() (
     set -o pipefail
@@ -1294,6 +1589,16 @@ deploy_selected_user_configuration_impl() {
         custom_restore_error 'deployed Hermes helper differs from its source'
         return 1
     }
+    local contract rows relative kind
+    contract="$(custom_restore_public_contract)" || return 1
+    rows="$(jq -r '.public_files[] | select(.restore == true) | [.path,.kind] | @tsv' "$contract")" || return 1
+    while IFS=$'\t' read -r relative kind; do
+        if grep -Fxq "$relative"$'\t'"$relative"$'\t'"$kind" "$manifest"; then
+            cmp -s -- "$dotfiles/$relative" "$target_home/$relative" || {
+                custom_restore_error "deployed selected public helper differs: $relative"; return 1;
+            }
+        fi
+    done <<< "$rows"
     cmp -s -- "$dotfiles/.config/systemd/user/agy-bridge.service" \
         "$target_home/.config/systemd/user/agy-bridge.service" || {
         custom_restore_error 'deployed Hermes unit differs from its source'

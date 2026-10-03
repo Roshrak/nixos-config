@@ -1,0 +1,6 @@
+name: human-stage-policy
+version: "1.0.0"
+description: "Fail-closed tool policy for human-controlled project stages."
+author: "Local"
+provides_hooks:
+  - pre_tool_call

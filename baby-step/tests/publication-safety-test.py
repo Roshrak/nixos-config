@@ -63,6 +63,10 @@ with tempfile.TemporaryDirectory(prefix="publication-safety-test.") as temp:
               "fixture\n", False)
     scan_case(scratch, "cache", "dotfiles/.config/noctalia/.noctalia-cache.json", "{}\n", False)
     scan_case(scratch, "private-log", "baby-step/logs/log.txt", "fixture\n", False)
+    scan_case(scratch, "private-inventory", "baby-step/reports/system-audit-fixture.md",
+              "Private machine inventory without a token pattern\n", False)
+    scan_case(scratch, "legacy-private-inventory", "baby-step/system-audit.md",
+              "Private machine inventory without a token pattern\n", False)
     scan_case(scratch, "newline", "docs/bad\nname.md", "fixture\n", False)
     scan_case(scratch, "guide", "docs/current-guide.md", "Source guide\n", True)
     synthetic_token = "gh" + "p_" + "A" * 36
@@ -72,6 +76,22 @@ with tempfile.TemporaryDirectory(prefix="publication-safety-test.") as temp:
               'api' + '_key = "' + synthetic_value + '"\n', False, synthetic_value)
     scan_case(scratch, "placeholder", "docs/guide.md",
               'password = "fixture-password"\n', True)
+    telegram = "987654321:" + "Z" * 35
+    scan_case(scratch, "telegram-format", "dotfiles/.config/app/settings.json", '{"telegram_token": "' + telegram + '"}\n', False, telegram)
+    for field in ["bot_token", "telegramToken", "telegram_bot_token"]:
+        value = "not-a-real-bot-credential-123"
+        scan_case(scratch, field, "dotfiles/.config/app/settings.json", '{"' + field + '": "' + value + '"}\n', False, value)
+    scan_case(scratch, "telegram-placeholder", "docs/guide.md", 'bot_token = "fixture-bot-token"\n', True)
+    for rel in ["scripts/clean-system.py", "scripts/clean-system.job.json", "plugins/human-stage-policy/__init__.py", "plugins/human-stage-policy/plugin.yaml", "skills/human-controlled-project-stages/SKILL.md"]:
+        scan_case(scratch, "public-" + rel.replace('/', '-'), "dotfiles/.hermes/" + rel, "# Public fixture code\n", True)
+    scan_case(scratch, "unknown-hermes-source", "dotfiles/.hermes/plugins/human-stage-policy/private.py", "private fixture\n", False)
+    linked = scratch / "linked-public-helper"
+    initialize(linked)
+    link = linked / "dotfiles/.hermes/scripts/clean-system.py"
+    link.parent.mkdir(parents=True)
+    link.symlink_to("../../../../outside-fixture")
+    run(REAL_GIT, "-C", str(linked), "add", "--", str(link.relative_to(linked)))
+    assert run("python3", str(CHECKER), "--repo", str(linked), check=False).returncode != 0
     print("Full-index path/content refusals, approved helper/docs, environment references, and value redaction: PASS")
 
     repo = scratch / "workflow"
@@ -81,7 +101,7 @@ with tempfile.TemporaryDirectory(prefix="publication-safety-test.") as temp:
     run(REAL_GIT, "-C", str(repo), "remote", "add", "origin", str(bare))
     run(REAL_GIT, "-C", str(repo), "push", "-q", "-u", "origin", "main")
     baby = repo / "baby-step"
-    for rel in ["update-and-push.sh", "lib/common.sh", "lib/source-manifest.sh", "lib/publication-check.py"]:
+    for rel in ["update-and-push.sh", "lib/common.sh", "lib/source-manifest.sh", "lib/publication-check.py", "lib/custom-service-manifest.json"]:
         (baby / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / rel, baby / rel)
     ignore_source = ROOT.parent / ".gitignore"

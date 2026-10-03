@@ -1,3 +1,5 @@
+> Current live-USB workflow: [LIVE-USB-INSTALL.md](LIVE-USB-INSTALL.md). The bootstrap now defaults to `installation/`; older direct `nixos/` references below are historical architecture examples.
+
 # Complete NixOS migration, installation, and multi-host guide
 
 This guide explains how to reproduce this system on fresh hardware while keeping

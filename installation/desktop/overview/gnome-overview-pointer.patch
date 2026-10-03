@@ -1,0 +1,146 @@
+--- a/src/core/keybindings.c
++++ b/src/core/keybindings.c
+@@ -1244,6 +1244,10 @@
+ 
+   meta_prefs_remove_listener (prefs_changed_callback, display);
+ 
++  g_signal_handler_disconnect (
++    clutter_backend_get_default_seat (meta_backend_get_clutter_backend (keys->backend)),
++    keys->overview_device_removed_handler_id);
++  g_hash_table_destroy (keys->overview_pointer_presses);
+   g_hash_table_destroy (keys->key_bindings_index);
+   g_hash_table_destroy (keys->key_bindings);
+ 
+@@ -1672,6 +1676,75 @@
+ 
+   /* Do the normal keybindings */
+   return process_event (display, window, event);
++}
++
++static gboolean
++process_overview_pointer (MetaDisplay        *display,
++                          MetaWindow         *window,
++                          const ClutterEvent *event)
++{
++  MetaKeyBindingManager *keys = &display->key_binding_manager;
++  ClutterInputDevice *source = clutter_event_get_source_device (event);
++  unsigned int mask;
++  GHashTableIter iter;
++  gpointer item;
++
++  if (!source || clutter_event_get_button (event) != 2)
++    return FALSE;
++
++  /* Pair releases with their own device even if modifiers were released first. */
++  if (clutter_event_type (event) == CLUTTER_BUTTON_RELEASE)
++    return g_hash_table_remove (keys->overview_pointer_presses, source);
++  /* A fresh press repairs stale state if an input-capture filter consumed
++   * the earlier release. It must never suppress the next physical click. */
++  g_hash_table_remove (keys->overview_pointer_presses, source);
++
++  devirtualize_modifiers (keys, clutter_event_get_state (event), &mask);
++  mask = mask_from_event_params (keys, mask);
++  if (!keys->super_mask || mask != (keys->super_mask | CLUTTER_SHIFT_MASK))
++    return FALSE;
++
++  /* Reuse the registered keyboard action, its inhibition and Shell mode filter. */
++  g_hash_table_iter_init (&iter, keys->key_bindings);
++  while (g_hash_table_iter_next (&iter, &item, NULL))
++    {
++      MetaKeyBinding *binding = item;
++      if (g_strcmp0 (binding->name, "toggle-overview") != 0 ||
++          !binding->handler || !meta_key_binding_has_handler_func (binding) ||
++          (binding->flags & (META_KEY_BINDING_PER_WINDOW | META_KEY_BINDING_CUSTOM_TRIGGER)))
++        continue;
++      if (display->focus_window &&
++          !(binding->handler->flags & META_KEY_BINDING_NON_MASKABLE) &&
++          meta_window_shortcuts_inhibited (display->focus_window, source))
++        return FALSE;
++      if (meta_compositor_filter_keybinding (display->compositor, binding))
++        return FALSE;
++      g_hash_table_add (keys->overview_pointer_presses, g_object_ref (source));
++      invoke_handler (display, binding->handler, window, event, binding);
++      return TRUE;
++    }
++  return FALSE;
++}
++
++gboolean
++meta_keybindings_process_overview_release (MetaDisplay        *display,
++                                          const ClutterEvent *event)
++{
++  MetaKeyBindingManager *keys = &display->key_binding_manager;
++  if (clutter_event_type (event) != CLUTTER_BUTTON_RELEASE ||
++      clutter_event_get_button (event) != 2)
++    return FALSE;
++  return g_hash_table_remove (keys->overview_pointer_presses,
++                              clutter_event_get_source_device (event));
++}
++
++static void
++on_overview_device_removed (ClutterSeat        *seat,
++                            ClutterInputDevice *device,
++                            MetaDisplay        *display)
++{
++  g_hash_table_remove (display->key_binding_manager.overview_pointer_presses,
++                       device);
+ }
+ 
+ /* Handle a key event. May be called recursively: some key events cause
+@@ -1699,6 +1772,10 @@
+     {
+     case CLUTTER_BUTTON_PRESS:
+     case CLUTTER_BUTTON_RELEASE:
++      keys->overlay_key_only_pressed = FALSE;
++      keys->locate_pointer_key_only_pressed = FALSE;
++      return process_overview_pointer (display, window, event);
++
+     case CLUTTER_TOUCH_BEGIN:
+     case CLUTTER_TOUCH_END:
+     case CLUTTER_SCROLL:
+@@ -2732,6 +2809,11 @@
+ 
+   keys->key_bindings = g_hash_table_new_full (NULL, NULL, NULL, (GDestroyNotify) meta_key_binding_free);
+   keys->key_bindings_index = g_hash_table_new (NULL, NULL);
++  keys->overview_pointer_presses = g_hash_table_new_full (NULL, NULL, g_object_unref, NULL);
++  keys->overview_device_removed_handler_id = g_signal_connect (
++    clutter_backend_get_default_seat (meta_backend_get_clutter_backend (backend)),
++    "device-removed", G_CALLBACK (on_overview_device_removed), display);
++
+ 
+   reload_modmap (keys);
+ 
+--- a/src/core/keybindings-private.h
++++ b/src/core/keybindings-private.h
+@@ -107,6 +107,8 @@
+ 
+   GHashTable *key_bindings;
+   GHashTable *key_bindings_index;
++  GHashTable *overview_pointer_presses;
++  gulong overview_device_removed_handler_id;
+   xkb_mod_mask_t ignored_modifier_mask;
+   xkb_mod_mask_t hyper_mask;
+   xkb_mod_mask_t virtual_hyper_mask;
+@@ -155,6 +157,9 @@
+ const char * meta_prefs_get_iso_next_group_option (void);
+ gboolean meta_prefs_is_locate_pointer_enabled (void);
+ 
++gboolean meta_keybindings_process_overview_release (MetaDisplay        *display,
++                                                    const ClutterEvent *event);
++
+ gboolean meta_display_process_keybinding_event (MetaDisplay        *display,
+                                                 const char         *name,
+                                                 const ClutterEvent *event);
+--- a/src/core/events.c
++++ b/src/core/events.c
+@@ -229,6 +229,10 @@
+       meta_tablet_action_mapper_handle_event (mapper, event);
+     }
+ 
++  /* A consumed shortcut's release must be paired even during window drags. */
++  if (meta_keybindings_process_overview_release (display, event))
++    return CLUTTER_EVENT_STOP;
++
+   window = get_window_for_event (display, event, event_actor);
+ 
+   if (window && !window->override_redirect &&

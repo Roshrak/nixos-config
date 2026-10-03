@@ -4,6 +4,7 @@
     "flake.nix",
     "flake.lock",
     "configuration.nix",
+    "desktop/autosleep.py",
     "desktop/gnome-window-rules/extension.js",
     "desktop/gnome-window-rules/metadata.json",
     "desktop/gnome-window-rules/schemas/org.gnome.shell.extensions.tonelico-window-rules.gschema.xml",

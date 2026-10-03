@@ -40,11 +40,20 @@ make_fixture_repo() {
         "$destination/dotfiles/.config/systemd/user/agy-bridge.service"
     cp -- "$source_repo/dotfiles/.config/systemd/user/mc-chat-responder.service" \
         "$destination/dotfiles/.config/systemd/user/mc-chat-responder.service"
+    mkdir -p "$destination/baby-step/lib"
+    cp -- "$source_repo/baby-step/lib/custom-service-manifest.json" "$destination/baby-step/lib/custom-service-manifest.json"
+    while IFS= read -r relative; do
+        [ "$relative" != .hermes/agy_bridge.py ] || continue
+        mkdir -p "$destination/dotfiles/$(dirname -- "$relative")"
+        cp -- "$source_repo/dotfiles/$relative" "$destination/dotfiles/$relative"
+    done < <(jq -r '.public_files[].path' "$source_repo/baby-step/lib/custom-service-manifest.json")
     chmod 755 "$destination/scripts/bootstrap-nixos.sh"
     chmod 644 "$destination/scripts/lib/custom-service-restore.sh"
 }
 
 make_fixture_repo "$fixture_repo"
+mkdir "$fixture_repo/wallpapers"
+printf 'fixture wallpaper bytes\n' > "$fixture_repo/wallpapers/test.jpg"
 printf 'fixture secret; must not be copied\n' > "$fixture_repo/dotfiles/.hermes/.env"
 printf 'fixture token; must not be copied\n' > "$fixture_repo/dotfiles/.hermes/auth.json"
 mkdir -p "$fixture_repo/dotfiles/.hermes/cache"
@@ -56,6 +65,15 @@ CUSTOM_RESTORE_DEST=""
 CUSTOM_RESTORE_HOME=""
 CUSTOM_RESTORE_SOURCE="$fixture_repo/dotfiles/.hermes/agy_bridge.py"
 run_root() {
+    if [ "$CUSTOM_RESTORE_INJECT" = rollback-race ] &&
+       [ "${1:-}" = mv ] && [ "${2:-}" = -T ] && [ "${3:-}" = -n ] &&
+       [ "${5:-}" = "$CUSTOM_RESTORE_DEST" ] &&
+       [[ "${6:-}" == */installed-after-rollback-* ]]; then
+        printf '\n# edited after rollback comparison\n' >> "$CUSTOM_RESTORE_DEST"
+        CUSTOM_RESTORE_INJECT=none
+        "$@" || return $?
+        return 0
+    fi
     if [ "$CUSTOM_RESTORE_INJECT" = rollback-copy ] &&
        [ "${1:-}" = mv ] && [ "${2:-}" = -T ] &&
        [ "${5:-}" = "$CUSTOM_RESTORE_DEST" ]; then
@@ -128,6 +146,11 @@ test "$(sha256sum "$recovery/previous" | awk '{print $1}')" = "$old_hash"
 test "$(stat -c '%a:%u:%g' "$recovery/previous")" = "$old_metadata"
 grep -Fxq 'present=1' "$recovery/prior-state.txt"
 grep -Fxq "sha256=$old_hash" "$recovery/prior-state.txt"
+grep -Fxq 'schema_version=2' "$recovery/prior-state.txt"
+grep -Fxq 'commit_state=committed' "$recovery/prior-state.txt"
+grep -Eq '^installed_identity=regular\|[[:xdigit:]]{64}\|644\|[0-9]+:[0-9]+\|[0-9]+:[0-9]+$' \
+    "$recovery/prior-state.txt"
+test "$(stat -c '%a:%u:%g' "$recovery/transaction.lock")" = "600:$uid:$gid"
 test ! -e "$fixture_home/.hermes/auth.json"
 test ! -e "$fixture_home/.hermes/cache"
 test -z "$(find "$fixture_home/.hermes" -maxdepth 1 -type f -name '.agy_bridge.py.*' -print -quit)"
@@ -166,6 +189,154 @@ restore_hermes_bridge "$fixture_repo/baby-step/custom-service-manifest.tsv" \
 rollback_hermes_bridge "$scratch/absence-recovery" "$absence_home" "$uid" "$gid" > /dev/null
 test ! -e "$absence_home/.hermes"
 printf 'Explicit rollback restores prior helper absence and directory metadata: PASS\n'
+
+# Explicit rollback must preserve a later content edit for both receipt types.
+for later_state in present absent; do
+    later_home="$scratch/later-edit-$later_state-home"
+    later_recovery="$scratch/later-edit-$later_state-recovery"
+    mkdir -p "$later_home"
+    chown "$uid:$gid" "$later_home"
+    if [ "$later_state" = present ]; then
+        mkdir -p "$later_home/.hermes"
+        chown "$uid:$gid" "$later_home/.hermes"
+        printf 'original helper before later-edit test\n' > "$later_home/.hermes/agy_bridge.py"
+        chmod 640 "$later_home/.hermes/agy_bridge.py"
+    fi
+    restore_hermes_bridge "$fixture_repo/baby-step/custom-service-manifest.tsv" \
+        "$fixture_repo/dotfiles" "$later_home" "$later_recovery" "$uid" "$gid" > /dev/null
+    if [ "$later_state" = present ]; then
+        later_before_hash="$(sha256sum "$later_recovery/hermes-bridge/previous" | awk '{print $1}')"
+    fi
+    printf '\n# independent later edit\n' >> "$later_home/.hermes/agy_bridge.py"
+    later_hash="$(sha256sum "$later_home/.hermes/agy_bridge.py" | awk '{print $1}')"
+    if rollback_hermes_bridge "$later_recovery" "$later_home" "$uid" "$gid" \
+        > "$scratch/later-edit-$later_state.out" 2> "$scratch/later-edit-$later_state.err"; then
+        printf 'Rollback overwrote a later %s-helper edit\n' "$later_state" >&2
+        exit 1
+    fi
+    test "$(sha256sum "$later_home/.hermes/agy_bridge.py" | awk '{print $1}')" = "$later_hash"
+    if [ "$later_state" = present ]; then
+        test "$(sha256sum "$later_recovery/hermes-bridge/previous" | awk '{print $1}')" = "$later_before_hash"
+    fi
+    test ! -e "$later_recovery/hermes-bridge/rolled-back"
+    printf 'Later %s-helper edit is preserved and rollback fails closed: PASS\n' "$later_state"
+done
+
+# Same bytes on a new inode, a mode edit, and a symlink replacement are not
+# the transaction-installed object and therefore cannot authorize rollback.
+for replacement_kind in inode mode symlink; do
+    replacement_home="$scratch/replacement-$replacement_kind-home"
+    replacement_recovery="$scratch/replacement-$replacement_kind-recovery"
+    mkdir -p "$replacement_home/.hermes"
+    chown "$uid:$gid" "$replacement_home" "$replacement_home/.hermes"
+    printf 'prior helper for replacement test\n' > "$replacement_home/.hermes/agy_bridge.py"
+    chmod 640 "$replacement_home/.hermes/agy_bridge.py"
+    restore_hermes_bridge "$fixture_repo/baby-step/custom-service-manifest.tsv" \
+        "$fixture_repo/dotfiles" "$replacement_home" "$replacement_recovery" "$uid" "$gid" > /dev/null
+    outside="$scratch/replacement-$replacement_kind-outside"
+    printf 'outside sentinel\n' > "$outside"
+    outside_hash="$(sha256sum "$outside" | awk '{print $1}')"
+    case "$replacement_kind" in
+        inode)
+            cp -p "$replacement_home/.hermes/agy_bridge.py" "$replacement_home/.hermes/replacement"
+            mv -T "$replacement_home/.hermes/replacement" "$replacement_home/.hermes/agy_bridge.py"
+            ;;
+        mode) chmod 0600 "$replacement_home/.hermes/agy_bridge.py" ;;
+        symlink)
+            rm -- "$replacement_home/.hermes/agy_bridge.py"
+            ln -s "$outside" "$replacement_home/.hermes/agy_bridge.py"
+            ;;
+    esac
+    if rollback_hermes_bridge "$replacement_recovery" "$replacement_home" "$uid" "$gid" \
+        > "$scratch/replacement-$replacement_kind.out" 2> "$scratch/replacement-$replacement_kind.err"; then
+        printf 'Rollback accepted changed %s destination\n' "$replacement_kind" >&2
+        exit 1
+    fi
+    if [ "$replacement_kind" = symlink ]; then
+        test -L "$replacement_home/.hermes/agy_bridge.py"
+    fi
+    test "$(sha256sum "$outside" | awk '{print $1}')" = "$outside_hash"
+    test -f "$replacement_recovery/hermes-bridge/previous"
+    test ! -e "$replacement_recovery/hermes-bridge/rolled-back"
+    printf 'Changed %s destination is preserved and rollback fails closed: PASS\n' "$replacement_kind"
+done
+
+# A change injected after the initial comparison but before quarantine is
+# detected after rename and restored without clobbering the later bytes.
+race_home="$scratch/rollback-race-home"
+race_recovery="$scratch/rollback-race-recovery"
+mkdir -p "$race_home/.hermes"
+chown "$uid:$gid" "$race_home" "$race_home/.hermes"
+printf 'prior helper for race fixture\n' > "$race_home/.hermes/agy_bridge.py"
+chmod 640 "$race_home/.hermes/agy_bridge.py"
+restore_hermes_bridge "$fixture_repo/baby-step/custom-service-manifest.tsv" \
+    "$fixture_repo/dotfiles" "$race_home" "$race_recovery" "$uid" "$gid" > /dev/null
+CUSTOM_RESTORE_DEST="$race_home/.hermes/agy_bridge.py"
+CUSTOM_RESTORE_INJECT=rollback-race
+if rollback_hermes_bridge "$race_recovery" "$race_home" "$uid" "$gid" \
+    > "$scratch/rollback-race.out" 2> "$scratch/rollback-race.err"; then
+    printf 'Injected edit between comparison and publication was accepted\n' >&2
+    exit 1
+fi
+grep -Fq 'edited after rollback comparison' "$race_home/.hermes/agy_bridge.py"
+test ! -e "$race_recovery/hermes-bridge/installed-after-rollback-$(awk -F= '$1 == "transaction_id" {print $2}' "$race_recovery/hermes-bridge/prior-state.txt")"
+grep -Fq 'helper changed during rollback compare' "$scratch/rollback-race.err"
+CUSTOM_RESTORE_DEST=""
+CUSTOM_RESTORE_INJECT=none
+printf 'Concurrent edit after comparison is restored at destination and not overwritten: PASS\n'
+
+# Incomplete legacy and malformed receipts must not authorize rollback.
+for receipt_case in legacy malformed; do
+    receipt_home="$scratch/receipt-$receipt_case-home"
+    receipt_recovery="$scratch/receipt-$receipt_case-recovery"
+    mkdir -p "$receipt_home/.hermes"
+    chown "$uid:$gid" "$receipt_home" "$receipt_home/.hermes"
+    printf 'prior helper for receipt test\n' > "$receipt_home/.hermes/agy_bridge.py"
+    chmod 640 "$receipt_home/.hermes/agy_bridge.py"
+    restore_hermes_bridge "$fixture_repo/baby-step/custom-service-manifest.tsv" \
+        "$fixture_repo/dotfiles" "$receipt_home" "$receipt_recovery" "$uid" "$gid" > /dev/null
+    receipt="$receipt_recovery/hermes-bridge/prior-state.txt"
+    if [ "$receipt_case" = legacy ]; then
+        awk -F= '$1 !~ /^(schema_version|transaction_id|commit_state|installed_identity)$/' \
+            "$receipt" > "$receipt.tmp"
+    else
+        sed 's/^installed_identity=.*/installed_identity=invalid/' "$receipt" > "$receipt.tmp"
+    fi
+    chmod 0600 "$receipt.tmp"
+    chown "$uid:$gid" "$receipt.tmp"
+    mv -T "$receipt.tmp" "$receipt"
+    current_hash="$(sha256sum "$receipt_home/.hermes/agy_bridge.py" | awk '{print $1}')"
+    previous_hash="$(sha256sum "$receipt_recovery/hermes-bridge/previous" | awk '{print $1}')"
+    if rollback_hermes_bridge "$receipt_recovery" "$receipt_home" "$uid" "$gid" \
+        > "$scratch/receipt-$receipt_case.out" 2> "$scratch/receipt-$receipt_case.err"; then
+        printf 'Rollback accepted %s receipt\n' "$receipt_case" >&2
+        exit 1
+    fi
+    test "$(sha256sum "$receipt_home/.hermes/agy_bridge.py" | awk '{print $1}')" = "$current_hash"
+    test "$(sha256sum "$receipt_recovery/hermes-bridge/previous" | awk '{print $1}')" = "$previous_hash"
+    test ! -e "$receipt_recovery/hermes-bridge/rolled-back"
+    printf '%s receipt cannot authorize destructive rollback: PASS\n' "$receipt_case"
+done
+
+# Two concurrent rollback callers serialize on the per-transaction lock.
+concurrent_home="$scratch/concurrent-rollback-home"
+concurrent_recovery="$scratch/concurrent-rollback-recovery"
+mkdir -p "$concurrent_home/.hermes"
+chown "$uid:$gid" "$concurrent_home" "$concurrent_home/.hermes"
+printf 'prior helper for concurrent rollback\n' > "$concurrent_home/.hermes/agy_bridge.py"
+chmod 640 "$concurrent_home/.hermes/agy_bridge.py"
+concurrent_hash="$(sha256sum "$concurrent_home/.hermes/agy_bridge.py" | awk '{print $1}')"
+restore_hermes_bridge "$fixture_repo/baby-step/custom-service-manifest.tsv" \
+    "$fixture_repo/dotfiles" "$concurrent_home" "$concurrent_recovery" "$uid" "$gid" > /dev/null
+rollback_hermes_bridge "$concurrent_recovery" "$concurrent_home" "$uid" "$gid" \
+    > "$scratch/concurrent-1.out" 2> "$scratch/concurrent-1.err" & concurrent_one=$!
+rollback_hermes_bridge "$concurrent_recovery" "$concurrent_home" "$uid" "$gid" \
+    > "$scratch/concurrent-2.out" 2> "$scratch/concurrent-2.err" & concurrent_two=$!
+wait "$concurrent_one"
+wait "$concurrent_two"
+test "$(sha256sum "$concurrent_home/.hermes/agy_bridge.py" | awk '{print $1}')" = "$concurrent_hash"
+grep -Fxq 'rolled-back=1' "$concurrent_recovery/hermes-bridge/rolled-back"
+printf 'Concurrent rollback callers serialize and complete idempotently: PASS\n'
 
 # Failure before the atomic rename leaves an originally absent helper absent.
 failure_home="$scratch/failure-home"
@@ -456,6 +627,19 @@ test -z "$(find "$private_source_target" -mindepth 1 -print -quit)"
 rm -rf -- "$fixture_repo/dotfiles/.hermes/.env" \
     "$fixture_repo/dotfiles/.hermes/auth.json" "$fixture_repo/dotfiles/.hermes/cache"
 printf 'Repository-copy preflight rejects private Hermes data before target-root writes, including --no-user-config: PASS\n'
+escape_target="$scratch/linked-etc-target"
+escape_outside="$scratch/linked-etc-outside"
+mkdir "$escape_target" "$escape_outside"
+printf 'preserved outside sentinel\n' > "$escape_outside/sentinel"
+ln -s "$escape_outside" "$escape_target/etc"
+if "$fixture_repo/scripts/bootstrap-nixos.sh" --target-root "$escape_target" --host tonelico --yes \
+    > "$scratch/linked-etc.out" 2> "$scratch/linked-etc.err"; then
+    printf 'Linked target/etc was accepted\n' >&2; exit 1
+fi
+test "$(cat "$escape_outside/sentinel")" = 'preserved outside sentinel'
+test ! -e "$escape_outside/nixos"
+test ! -e "$escape_target/home"
+printf 'Actual bootstrap refuses linked target/etc before any target write: PASS\n'
 bootstrap_output="$scratch/bootstrap.stdout"
 bootstrap_error="$scratch/bootstrap.stderr"
 set +e
@@ -488,6 +672,10 @@ cmp -s "$fixture_repo/scripts/bootstrap-nixos.sh" \
 grep -Fq '[5/7] Deploying selected user configuration... OK' "$bootstrap_output"
 grep -Fq 'Hermes service was not started.' "$bootstrap_output"
 printf 'Whole bootstrap entry point restores only the declared helper and unit in fixture target: PASS\n'
+cmp -s "$fixture_repo/wallpapers/test.jpg" "$fixture_home/Pictures/Wallpapers/test.jpg"
+test "$(cat "$fixture_home/baby-step/state/nixos-source.path")" = '/etc/nixos'
+test "$(stat -c '%a' "$fixture_home/baby-step/state/nixos-source.path")" = 600
+printf 'Wallpaper bytes and private installed-source pointer restored by actual bootstrap: PASS\n'
 
 # Mutate the candidate back to the obsolete three-argument call and prove the
 # default target-root repository-copy path detects the shared helper arity
@@ -581,7 +769,9 @@ printf '%s\n' '--no-user-config skips custom restore and does not claim service 
 # Reintroduce the reviewed omission in a disposable copy of the production
 # library. The old behavior exits successfully and copies the unit, while the
 # independent fixture assertion correctly detects the missing helper.
-mutant_library="$scratch/mutant-custom-service-restore.sh"
+mutant_library="$scratch/mutant-repository/scripts/lib/custom-service-restore.sh"
+mkdir -p "${mutant_library%/*}" "$scratch/mutant-repository/baby-step/lib"
+cp -- "$fixture_repo/baby-step/lib/custom-service-manifest.json" "$scratch/mutant-repository/baby-step/lib/custom-service-manifest.json"
 python3 - "$fixture_repo/scripts/lib/custom-service-restore.sh" "$mutant_library" <<'PY'
 from pathlib import Path
 import sys

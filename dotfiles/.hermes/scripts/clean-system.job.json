@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "name": "Hermes & System 12h Cleanup",
+  "script": "clean-system.py",
+  "script_home_relative": ".hermes/scripts/clean-system.py",
+  "schedule": {"kind": "interval", "minutes": 720},
+  "no_agent": true,
+  "retention_days": 30,
+  "restore_boundary": "Recipe only. Preserve an existing matching job. Creating a missing job requires the installed Hermes scheduler interface and private operator-supplied delivery/credentials; never copy cron runtime, messages or credentials from public source. Restoring this file does not enable or schedule a job."
+}

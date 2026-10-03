@@ -53,7 +53,7 @@ nixos_source_manifest() (
     while IFS= read -r -d '' path; do
         relative="${path#"$source_root"/}"
         case "$relative" in
-            result|result-*|*.bak|*.bak-*|*.before-*|*.backup.*|*.lock.before-*)
+            result|result-*|*.bak|*.bak-*|*.before-*|*.backup.*)
                 continue
                 ;;
             hardware-configuration.nix)
@@ -65,7 +65,7 @@ nixos_source_manifest() (
         esac
 
         case "$relative" in
-            *.nix|flake.lock|.gitignore|*.md|*.lua|*.js|*.json|*.xml|*.ttf|*.otf|\
+            *.nix|flake.lock|.gitignore|*.md|*.lua|*.js|*.json|*.xml|*.py|*.ttf|*.otf|\
             *.css|*.svg|*.patch|*.diff|*.sh|*.service|*.target|*.conf|*.kdl|\
             *.yaml|*.yml|*.toml|*.desktop|*.rules)
                 ;;

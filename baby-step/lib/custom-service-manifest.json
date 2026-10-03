@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "public_files": [
+    {"path": ".hermes/agy_bridge.py", "origin": "home", "kind": "code", "restore": true, "mode": "0644", "recovery": "hermes-bridge"},
+    {"path": ".hermes/scripts/clean-system.py", "origin": "home", "kind": "code", "restore": true, "mode": "0755", "recovery": "hermes-clean-system"},
+    {"path": ".hermes/scripts/clean-system.job.json", "origin": "repository", "kind": "retained", "restore": true, "mode": "0644", "recovery": "hermes-clean-system-recipe"},
+    {"path": ".hermes/plugins/human-stage-policy/__init__.py", "origin": "repository", "kind": "retained", "restore": false, "mode": "0644"},
+    {"path": ".hermes/plugins/human-stage-policy/plugin.yaml", "origin": "repository", "kind": "retained", "restore": false, "mode": "0644"},
+    {"path": ".hermes/skills/human-controlled-project-stages/SKILL.md", "origin": "repository", "kind": "retained", "restore": false, "mode": "0644"}
+  ]
+}

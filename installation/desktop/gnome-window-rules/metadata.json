@@ -1,0 +1,8 @@
+{
+  "uuid": "tonelico-window-rules@aesc",
+  "name": "Tonelico Window Rules",
+  "description": "Cursor-centered window placement, startup size caps and directional keyboard controls for GNOME.",
+  "version": 2,
+  "shell-version": [ "50" ],
+  "settings-schema": "org.gnome.shell.extensions.tonelico-window-rules"
+}

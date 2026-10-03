@@ -1,0 +1,4 @@
+# Unified patch context lines intentionally contain a single space.
+*.patch -whitespace
+# Preserve the reviewed installation snapshot byte-for-byte, including its inherited spacing.
+installation/flake.nix -whitespace

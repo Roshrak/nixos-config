@@ -1,0 +1,11 @@
+result
+result-*
+backup-*/
+*.bak
+*.bak.*
+*.before-*
+*.backup.*
+
+# nixos-generate-config writes this compatibility file at the root. The active
+# flake imports hosts/<attribute>/hardware-configuration.nix instead.
+/hardware-configuration.nix

@@ -2,11 +2,12 @@
 
 set -uo pipefail
 
-SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
 # shellcheck source=lib/common.sh
 . "$SCRIPT_DIR/lib/common.sh"
 
 check_only=0
+[ "$#" -le 1 ] || { printf 'ERROR: Use one option at a time.\n' >&2; exit 2; }
 case "${1:-}" in
     "") ;;
     --check-only) check_only=1 ;;
@@ -30,10 +31,12 @@ fi
 start_log "update"
 acquire_maintenance_lock
 TOTAL=9
+[ "$check_only" -eq 0 ] || TOTAL=1
 BUILD_WORK=""
 lock_backup=""
 lock_updated=0
 lock_existed=0
+lock_updated_identity=''
 activation_attempted=0
 fallback_before=""
 update_run_id="${MAINTENANCE_RUN_ID:-$(date +%s)-$$}"
@@ -61,11 +64,18 @@ trap 'printf "Interrupted before completion.\n" >> "$LOG_FILE"; exit 130' INT TE
 restore_lock() {
     [ "$lock_updated" -eq 1 ] || return 0
 
+    if [ -z "$lock_updated_identity" ] || [ -L "$NIXOS_DIR/flake.lock" ] ||
+       [ "$(lock_identity)" != "$lock_updated_identity" ]; then
+        printf 'ERROR: flake.lock changed or its identity is unknown; preserving it. Before-image: %s\n' \
+            "${lock_backup:-no prior lock existed}" | tee -a "$LOG_FILE" >&2
+        return 1
+    fi
+
     printf 'Restoring the previous flake.lock after the failed update.\n' >> "$LOG_FILE"
     if [ "$lock_existed" -eq 0 ]; then
         if [ ! -e "$NIXOS_DIR/flake.lock" ] ||
            rm -f -- "$NIXOS_DIR/flake.lock" >> "$LOG_FILE" 2>&1 ||
-           sudo rm -f -- "$NIXOS_DIR/flake.lock" >> "$LOG_FILE" 2>&1; then
+           run_logged "Remove this update's new lock" sudo -n rm -f -- "$NIXOS_DIR/flake.lock"; then
             lock_updated=0
             return 0
         fi
@@ -78,7 +88,7 @@ restore_lock() {
         lock_updated=0
         return 0
     fi
-    if sudo cp -a "$lock_backup" "$NIXOS_DIR/flake.lock" >> "$LOG_FILE" 2>&1; then
+    if run_logged "Restore the previous lock before-image" sudo -n cp -a "$lock_backup" "$NIXOS_DIR/flake.lock"; then
         lock_updated=0
         return 0
     fi
@@ -87,12 +97,21 @@ restore_lock() {
     return 1
 }
 
-printf 'Starting a safe system update.\n\n'
+lock_identity() {
+    if [ ! -e "$NIXOS_DIR/flake.lock" ] && [ ! -L "$NIXOS_DIR/flake.lock" ]; then printf 'ABSENT\n'; return 0; fi
+    [ -f "$NIXOS_DIR/flake.lock" ] && [ ! -L "$NIXOS_DIR/flake.lock" ] || return 1
+    stat -c '%d:%i:%u:%g:%a' "$NIXOS_DIR/flake.lock" || return 1
+    sha256sum "$NIXOS_DIR/flake.lock" || return 1
+}
+
+show_banner 'NixOS update' 'Back up lock -> update inputs -> evaluate -> build -> activate -> verify'
+[ "$check_only" -eq 0 ] || show_detail 'CHECK ONLY: prerequisites and target detection; no update or build.'
 
 show_step 1 "$TOTAL" "Checking commands, disk space, and flake target"
+require_commands nix jq hostname df nixos-rebuild systemctl sudo timeout bootctl readlink sha256sum sort xargs stat mktemp || fatal 'A required update command is missing'
 free_kib="$(df -Pk / | awk 'NR == 2 { print $4 }')"
 boot_free_kib="$(df -Pk /boot | awk 'NR == 2 { print $4 }')"
-if require_commands nix jq hostname df nixos-rebuild systemctl sudo timeout bootctl readlink sha256sum sort xargs &&
+if [[ "$free_kib" =~ ^[0-9]+$ && "$boot_free_kib" =~ ^[0-9]+$ ]] &&
     [ "$free_kib" -ge 5242880 ] &&
     [ "$boot_free_kib" -ge 262144 ] &&
     detect_flake_target; then
@@ -119,9 +138,13 @@ if ! sudo -v; then
 fi
 
 show_step 2 "$TOTAL" "Creating a safety backup of flake.lock"
+[ ! -L "$NIXOS_DIR/flake.lock" ] || fatal 'Refusing a symlinked flake.lock, including a dangling link'
+if [ -e "$NIXOS_DIR/flake.lock" ] && [ ! -f "$NIXOS_DIR/flake.lock" ]; then
+    fatal 'flake.lock exists but is not a regular file; it was preserved'
+fi
 if [ -f "$NIXOS_DIR/flake.lock" ]; then
     lock_existed=1
-    lock_backup="$BACKUP_DIR/flake.lock.previous"
+    lock_backup="$(mktemp "$BACKUP_DIR/flake.lock.previous.XXXXXX")" || fatal 'Could not create a unique lock before-image'
     if cp -a "$NIXOS_DIR/flake.lock" "$lock_backup" >> "$LOG_FILE" 2>&1; then
         show_ok
     else
@@ -136,9 +159,15 @@ fi
 
 show_step 3 "$TOTAL" "Updating Nix flake inputs"
 lock_updated=1
-if run_logged "Nix flake update" nix flake update --flake "$NIXOS_DIR"; then
+update_command=(nix flake update --flake "path:$NIXOS_DIR")
+if [ ! -w "$NIXOS_DIR" ] || { [ -e "$NIXOS_DIR/flake.lock" ] && [ ! -w "$NIXOS_DIR/flake.lock" ]; }; then
+    update_command=(sudo -n "${update_command[@]}")
+fi
+if run_logged "Nix flake update" "${update_command[@]}"; then
+    lock_updated_identity="$(lock_identity)" || fatal 'Updated flake.lock is not a regular readable file'
     show_ok
 else
+    lock_updated_identity="$(lock_identity)" || lock_updated_identity=''
     show_failed
     if ! restore_lock; then
         fatal "Nix flake update failed, and the previous flake.lock could not be restored."
@@ -150,8 +179,8 @@ else
 fi
 
 show_step 4 "$TOTAL" "Evaluating the updated configuration"
-if run_logged "Updated NixOS evaluation" nix eval --raw \
-       "$NIXOS_DIR#nixosConfigurations.$FLAKE_ATTR.config.system.build.toplevel.drvPath"; then
+if run_logged "Updated NixOS evaluation" nix eval --no-write-lock-file --raw \
+       "path:$NIXOS_DIR#nixosConfigurations.$FLAKE_ATTR.config.system.build.toplevel.drvPath"; then
     show_ok
 else
     show_failed
@@ -164,13 +193,16 @@ else
     fatal "The updated configuration did not evaluate. Nothing was activated."
 fi
 
-BUILD_WORK="$(mktemp -d "$STATE_DIR/update-build.XXXXXX")"
+validated_source_digest="$(configuration_source_digest)" || fatal 'Could not fingerprint the updated source'
+BUILD_WORK="$(mktemp -d "$STATE_DIR/update-build.XXXXXX")" || fatal 'Could not create an isolated build directory'
 show_step 5 "$TOTAL" "Building the updated system"
 if (
     cd "$BUILD_WORK" || exit 1
-    run_logged "NixOS build" nixos-rebuild build --flake "$FLAKE_TARGET"
+    run_logged "NixOS build" nixos-rebuild build --no-write-lock-file --flake "$FLAKE_TARGET"
 ); then
     built_system="$(readlink -f "$BUILD_WORK/result" 2>/dev/null || true)"
+    [ -n "$built_system" ] && [ -x "$built_system/init" ] || fatal 'Build returned success without a usable candidate system'
+    [ "$(configuration_source_digest)" = "$validated_source_digest" ] || fatal 'Source changed during the build; candidate was not activated'
     show_ok
     record_success build "$FLAKE_TARGET -> ${built_system:-build completed}"
 else
@@ -198,7 +230,7 @@ fi
 printf 'Fallback system before activation: %s\n' "$fallback_before" >> "$LOG_FILE"
 
 show_step 6 "$TOTAL" "Running the dry activation preflight"
-if run_logged "NixOS dry activation" sudo nixos-rebuild dry-activate --flake "$FLAKE_TARGET"; then
+if run_logged "NixOS dry activation" sudo nixos-rebuild --no-reexec dry-activate --store-path "$built_system"; then
     show_ok
 else
     show_failed
@@ -212,8 +244,9 @@ else
 fi
 
 show_step 7 "$TOTAL" "Activating the successfully built system"
+[ "$(configuration_source_digest)" = "$validated_source_digest" ] || fatal 'Source changed before activation; candidate was not switched'
 activation_attempted=1
-if run_logged "NixOS switch" sudo nixos-rebuild switch --flake "$FLAKE_TARGET"; then
+if run_logged "NixOS switch" sudo nixos-rebuild --no-reexec switch --store-path "$built_system"; then
     active_system="$(readlink -f /run/current-system)"
     if [ -z "$built_system" ] || [ "$active_system" != "$built_system" ]; then
         show_failed
@@ -251,7 +284,7 @@ if run_logged "NixOS switch" sudo nixos-rebuild switch --flake "$FLAKE_TARGET"; 
 
     show_ok
     printf '  Boot default: %s (generation %s)\n' "$expected_boot_id" "$current_gen"
-    printf '  Named fallback remains unchanged and bootable: %s\n' "$fallback_system"
+    printf '  Named fallback unchanged; boot entry present: %s\n' "$fallback_system"
     record_success switch "$FLAKE_TARGET -> $active_system"
 else
     show_failed
@@ -274,20 +307,20 @@ fi
 if [ "$non_nix_warning" -eq 0 ]; then
     show_ok
 else
-    show_warning
+    show_warning 'Optional Flatpak/firmware metadata work failed; NixOS activation already completed. See the command output above.'
 fi
 
 show_step 9 "$TOTAL" "Running the final health check"
 health_status=0
-"$SCRIPT_DIR/check-system.sh" >> "$LOG_FILE" 2>&1 || health_status=$?
+run_logged 'Post-update health check' "$SCRIPT_DIR/check-system.sh" || health_status=$?
 case "$health_status" in
     0)
         show_ok
         health_warning="None"
         ;;
     1)
-        show_warning
         health_warning="The update switched successfully with health warnings; see $LOG_FILE"
+        show_warning "$health_warning"
         ;;
     *)
         show_failed
@@ -304,7 +337,8 @@ receipt_health=passed
 if [ "$health_status" -eq 1 ]; then
     receipt_health=warning
 fi
-if ! write_update_receipt "$update_run_id" "$receipt_health"; then
+if [ "$(configuration_source_digest)" != "$validated_source_digest" ] ||
+   ! write_update_receipt "$update_run_id" "$receipt_health"; then
     show_failed
     write_maintenance_state "System update" \
         "System switched and health check completed, but the success receipt could not be verified" \
