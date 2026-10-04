@@ -91,6 +91,8 @@ class InstallerTests(unittest.TestCase):
         loader=self.target/'boot/loader/entries';loader.mkdir(parents=True)
         (self.target/'boot/kernel').write_text('fixture kernel')
         (self.target/'boot/initrd').write_text('fixture initrd')
+        fallback=self.target/'boot/EFI/BOOT/BOOTX64.EFI';fallback.parent.mkdir(parents=True)
+        fallback.write_text('owned UEFI loader fixture')
         (loader/'nixos.conf').write_text(f'linux /kernel\ninitrd /initrd\noptions init={candidate}/init\n')
         (self.target/'etc/shadow').write_text('aesc:fixture-hash:1:0:99999:7:::\n')
         data={'schema':1,'target':str(self.target),'mounts':{},'host':'tonelico',
@@ -146,5 +148,26 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(self.phase('password',data,safe,True),0)
         self.assertEqual(self.phase('verify',data,safe),0)
         self.assertTrue(json.loads((self.target/'receipt.json').read_text())['verified'])
+
+    def test_target_store_build_does_not_require_live_payload(self):
+        candidate,local,profile,data=self.installed_fixture();calls=[]
+        candidate=Path('/nix/store/0123456789abcdfghijklmnpqrsvwxyz-owned-system')
+        payload=self.target/str(candidate).lstrip('/')/'bin/switch-to-configuration'
+        payload.parent.mkdir(parents=True);payload.write_text('target-only fixture')
+        scratch=self.target/'var/lib/nixos-live-installer';scratch.mkdir(parents=True)
+        def safe(argv,capture=False):
+            calls.append(argv)
+            return str(candidate) if capture else None
+        self.assertFalse((candidate/'bin/switch-to-configuration').exists())
+        self.assertEqual(self.phase('build',data,safe),0)
+        call=calls[0]
+        self.assertEqual(call[call.index('--store')+1],str(self.target))
+        self.assertIn('auto?trusted=1',call)
+        self.assertEqual(json.loads((self.target/'receipt.json').read_text())['candidate'],str(candidate))
+
+    def test_verify_requires_standalone_efi_loader(self):
+        candidate,local,profile,data=self.installed_fixture()
+        (self.target/'boot/EFI/BOOT/BOOTX64.EFI').unlink()
+        with self.assertRaisesRegex(ValueError,'Standalone UEFI'):self.phase('verify',data)
 
 if __name__=='__main__':unittest.main()

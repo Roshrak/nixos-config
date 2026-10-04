@@ -31,7 +31,7 @@ def allowed_path(path):
     parts = PurePosixPath(path).parts
     if not parts or path.startswith("/") or ".." in parts:
         return False
-    if path in {"README.md", ".gitignore", ".gitattributes"}:
+    if path in {"README.md", ".gitignore", ".gitattributes", "flake.nix", "flake.lock"}:
         return True
     if path.startswith("wallpapers/"):
         return PurePosixPath(path).suffix.lower() in {".jpg", ".jpeg", ".png", ".md", ".json"}
@@ -57,7 +57,7 @@ def forbidden_path(path):
         return True
     if path.startswith(("baby-step/logs/", "baby-step/state/", "baby-step/backups/", "baby-step/reports/", "baby-step/full-audit-")):
         return True
-    if path.startswith(("baby-step/gen129-golden-recovery-", "baby-step/script-install-github-")):
+    if path.startswith(("baby-step/gen129-golden-recovery-", "baby-step/script-install-github-", "baby-step/one-paste-installer-")):
         return True
     if path.startswith("baby-step/system-audit") and path.endswith(".md"):
         return True

@@ -175,11 +175,21 @@ def main(argv=None):
     else:
         data=load_receipt(receipt,target,mounts)
         if args.phase == 'build':
-            output=run(['nix','--extra-experimental-features','nix-command flakes','build','--no-link',
-                        '--print-out-paths','--no-write-lock-file',
-                        f'path:{source}#nixosConfigurations.{HOST}.config.system.build.toplevel'],True)
+            # Match nixos-install's local target-store strategy; the live ISO's
+            # writable /nix/store is RAM-backed and cannot hold this desktop.
+            scratch=regular_path(target/'var/lib/nixos-live-installer/build-tmp')
+            scratch.mkdir(exist_ok=True,mode=0o700)
+            previous_tmp=os.environ.get('TMPDIR');os.environ['TMPDIR']=str(scratch)
+            try:
+                output=run(['nix','--extra-experimental-features','nix-command flakes','build','--no-link',
+                            '--store',str(target),'--extra-substituters','auto?trusted=1',
+                            '--print-out-paths','--no-write-lock-file',
+                            f'path:{source}#nixosConfigurations.{HOST}.config.system.build.toplevel'],True)
+            finally:
+                if previous_tmp is None:os.environ.pop('TMPDIR',None)
+                else:os.environ['TMPDIR']=previous_tmp
             candidate=Path(output)
-            if not str(candidate).startswith('/nix/store/') or not (candidate/'bin/switch-to-configuration').is_file():
+            if candidate.parent!=Path('/nix/store') or not target_payload_exists(target,candidate,'bin/switch-to-configuration'):
                 raise ValueError('Build did not return one valid NixOS toplevel.')
             data.update(built=True,candidate=str(candidate));save_receipt(receipt,data)
             print(f'[VERIFIED] Built candidate: {candidate}. No activation.')
@@ -187,7 +197,7 @@ def main(argv=None):
             if not data.get('built'): raise ValueError('Run build before install.')
             candidate=Path(data['candidate'])
             for name in ('kernel','initrd','init','bin/switch-to-configuration'):
-                if not (candidate/name).exists(): raise ValueError(f'Missing candidate payload: {name}')
+                if not target_payload_exists(target,candidate,name): raise ValueError(f'Missing target candidate payload: {name}')
             # Confirm source still evaluates to the exact closure being installed.
             expected=run(['nix','--extra-experimental-features','nix-command flakes','eval','--raw',
                           '--no-write-lock-file',f'path:{source}#nixosConfigurations.{HOST}.config.system.build.toplevel'],True)
@@ -217,6 +227,8 @@ def main(argv=None):
                     if fields[0]=='aesc' and len(fields)>1:
                         password_ok=bool(fields[1]) and not fields[1].startswith(('!','*'))
             if not boot_entry_matches(target,data['candidate']): raise ValueError('No matching bootloader entry with existing ESP payloads.')
+            if not regular_path(target/'boot/EFI/BOOT/BOOTX64.EFI').is_file():
+                raise ValueError('Standalone UEFI boot payload is missing from the installed disk.')
             if not password_ok: raise ValueError('aesc login password is not initialized: run --phase password.')
             data['account_state']='VERIFIED_INITIALIZED';data['verified']=True;save_receipt(receipt,data)
             print('[VERIFIED] Source, installed profile, account password and boot entries. Cold boot and desktop acceptance remain untested. No reboot performed.')

@@ -1,61 +1,66 @@
-# Tonelico · NixOS desktop & live-USB restore
+# Install the complete desktop
 
-A pinned NixOS desktop for **aesc**: Niri, Sway, Mango, Hyprland, KDE Plasma, GNOME and XFCE, Noctalia, Fcitx5 Lotus, development tools, and the declared agent services.
-
-**Start here:** [Live-USB installation](docs/LIVE-USB-INSTALL.md) · [Maintenance commands](baby-step/README.txt) · [Wallpapers](wallpapers/)
-
-| Path | Purpose |
-| --- | --- |
-| [`installation/`](installation/) | Reviewed desktop source for a fresh install; no saved laptop recovery-generation pins |
-| [`scripts/install-from-live-usb.py`](scripts/install-from-live-usb.py) | Explicit inspect → prepare → build → install → password → verify phases |
-| [`scripts/bootstrap-nixos.sh`](scripts/bootstrap-nixos.sh) | Host/hardware import, recoverable configuration deployment and selected user-file restore |
-| [`dotfiles/`](dotfiles/) | Selected desktop settings and manifest-approved service code; credentials excluded |
-| [`baby-step/`](baby-step/) | Maintenance commands with stages, live output, exit codes, private logs and isolated tests |
-| [`wallpapers/`](wallpapers/) | All 30 original images, approximately 100 MiB; restored into `~/Pictures/Wallpapers` |
-| [`nixos/`](nixos/) | Original configuration/history; the installer uses the reviewed `installation/` subtree |
-
-## From the NixOS live USB
-
-Boot in **UEFI mode**, choose and mount your installation root at `/mnt` and its EFI partition at `/mnt/boot`. The helper **does not partition or format disks**, reboot, or switch the live system. This snapshot targets the current Intel x86_64 laptop and user `aesc` (UID 1000); it is not a universal hardware image.
+Boot the **NixOS installer USB in UEFI mode**, connect to the internet, open its terminal, and paste:
 
 ```bash
-nix-shell -p git python3
-git clone https://github.com/Roshrak/nixos-config.git
-cd nixos-config
-python3 scripts/install-from-live-usb.py --phase inspect
-sudo "$(command -v python3)" scripts/install-from-live-usb.py --phase prepare
-sudo "$(command -v python3)" scripts/install-from-live-usb.py --phase build
-sudo "$(command -v python3)" scripts/install-from-live-usb.py --phase install
-sudo "$(command -v python3)" scripts/install-from-live-usb.py --phase password
-sudo "$(command -v python3)" scripts/install-from-live-usb.py --phase verify
+nix --extra-experimental-features 'nix-command flakes' run --refresh github:Roshrak/nixos-config#install
 ```
 
-`prepare` generates **fresh hardware configuration**; no old disk UUIDs are reused. `build` records the exact output; `install` checks that source and mount identities still match before installing it. `password` sets the login password interactively without saving it in a log. Detailed preparation, failure recovery and limitations are in the [installation guide](docs/LIVE-USB-INSTALL.md).
+Choose the internal disk, type the requested `ERASE /dev/…` confirmation, then set the `aesc` login password when prompted. **All data on the selected disk will be replaced.** The command handles partitioning, mounting, **fresh hardware configuration**, the full NixOS build, desktop/apps, dotfiles, maintenance scripts, all wallpapers, and the bootloader. When it reports completion, shut down, remove the USB, and power on into the installed system.
 
-## On the installed desktop
+This is my Intel x86_64 desktop setup, with the configured Hyprland, Plasma, GNOME, Niri, Sway, Mango and XFCE sessions. Private agent credentials and personal files are excluded. [Installation details and recovery](docs/LIVE-USB-INSTALL.md).
 
-```bash
-~/baby-step/check-system.sh
-~/baby-step/rebuild-system.sh --build-only
-~/baby-step/update-system.sh --check-only
-~/baby-step/run-tests.sh --quick
-```
+# All wallpapers
 
-Run maintenance as your normal user. A private source pointer selects `/etc/nixos` on fresh installs and `/etc/nixos/gen129-recovery` on the recovered laptop. Explicit `path:` flake references include required new files without staging unrelated Git work.
-
-`autosleep on` selects lock/display-off after five minutes of inactivity while applications remain running; `autosleep off` disables idle display-off. Overview bindings are `Super+O` and `Super+Shift+middle-click` in the configured sessions. Automated source/build tests verify integration; physical shortcuts, actual idle/lock behavior and subjective visual acceptance still need desktop acceptance.
-
-Publication and backup tools preserve existing Git work and scan approved source paths. Cloud wallpaper transfer uses `rclone copy` rather than deleting destination-only files. Read [custom-service restore boundaries](docs/CUSTOM-SERVICE-RESTORE.md) before restoring agents.
-
-## Wallpaper previews
-
-<p>
-  <img src="wallpapers/tree.jpg" width="290" alt="Tree wallpaper">
-  <img src="wallpapers/nix.png" width="290" alt="Nix wallpaper">
-</p>
-
-[Browse the complete folder](wallpapers/). Images retain their original filenames and bytes. This repository does not grant ownership or a new license to third-party artwork.
-
-## What a restore does and does not include
-
-The clone contains the declared system, selected dotfiles, scripts, fonts, wallpaper assets and approved custom-service source. It does not contain Telegram/API tokens, browser cookies, passwords, private keys, personal documents, VM disks or the entire home directory. Agent credentials and any omitted application data need their own private restore. A successful build is not proof of a successful cold boot, working screen sharing or physical hardware behavior.
+<table>
+  <tr>
+    <td><a href="wallpapers/120523661_p0.jpg"><img src="wallpapers/120523661_p0.jpg" width="300" alt="120523661_p0.jpg"></a></td>
+    <td><a href="wallpapers/137155645_p0.jpg"><img src="wallpapers/137155645_p0.jpg" width="300" alt="137155645_p0.jpg"></a></td>
+    <td><a href="wallpapers/Vocaloid-Hatsune-Miku-blue-blue-hair-fan-art-landscape-1499037-wallhere.com.jpg"><img src="wallpapers/Vocaloid-Hatsune-Miku-blue-blue-hair-fan-art-landscape-1499037-wallhere.com.jpg" width="300" alt="Vocaloid-Hatsune-Miku-blue-blue-hair-fan-art-landscape-1499037-wallhere.com.jpg"></a></td>
+  </tr>
+  <tr>
+    <td><a href="wallpapers/__morgan_le_fay_and_aesc_fate_and_1_more_drawn_by_antinese__70c1f8a98bb2390d224d09920b6242d0.jpg"><img src="wallpapers/__morgan_le_fay_and_aesc_fate_and_1_more_drawn_by_antinese__70c1f8a98bb2390d224d09920b6242d0.jpg" width="300" alt="__morgan_le_fay_and_aesc_fate_and_1_more_drawn_by_antinese__70c1f8a98bb2390d224d09920b6242d0.jpg"></a></td>
+    <td><a href="wallpapers/__morgan_le_fay_and_aesc_fate_and_1_more_drawn_by_mento__f67538d98eaf6f373f3f6e0eb1ba8d49.jpg"><img src="wallpapers/__morgan_le_fay_and_aesc_fate_and_1_more_drawn_by_mento__f67538d98eaf6f373f3f6e0eb1ba8d49.jpg" width="300" alt="__morgan_le_fay_and_aesc_fate_and_1_more_drawn_by_mento__f67538d98eaf6f373f3f6e0eb1ba8d49.jpg"></a></td>
+    <td><a href="wallpapers/__morgan_le_fay_fate_and_1_more_drawn_by_mochi_upamo__5a0064b23658cf009024bdb8bb13c707.jpg"><img src="wallpapers/__morgan_le_fay_fate_and_1_more_drawn_by_mochi_upamo__5a0064b23658cf009024bdb8bb13c707.jpg" width="300" alt="__morgan_le_fay_fate_and_1_more_drawn_by_mochi_upamo__5a0064b23658cf009024bdb8bb13c707.jpg"></a></td>
+  </tr>
+  <tr>
+    <td><a href="wallpapers/__morgan_le_fay_fate_and_1_more_drawn_by_reluvy__617c9c2c2600b9f4c49693f239d75f10.png"><img src="wallpapers/__morgan_le_fay_fate_and_1_more_drawn_by_reluvy__617c9c2c2600b9f4c49693f239d75f10.png" width="300" alt="__morgan_le_fay_fate_and_1_more_drawn_by_reluvy__617c9c2c2600b9f4c49693f239d75f10.png"></a></td>
+    <td><a href="wallpapers/ashes_ash_firewood_130924_1920x1200.jpg"><img src="wallpapers/ashes_ash_firewood_130924_1920x1200.jpg" width="300" alt="ashes_ash_firewood_130924_1920x1200.jpg"></a></td>
+    <td><a href="wallpapers/flower_sunflower_artificial_119551_1920x1200.jpg"><img src="wallpapers/flower_sunflower_artificial_119551_1920x1200.jpg" width="300" alt="flower_sunflower_artificial_119551_1920x1200.jpg"></a></td>
+  </tr>
+  <tr>
+    <td><a href="wallpapers/hatsune-miku-mclaren-gtr-and-the-fashionable-driver-27-1920x1200.jpg"><img src="wallpapers/hatsune-miku-mclaren-gtr-and-the-fashionable-driver-27-1920x1200.jpg" width="300" alt="hatsune-miku-mclaren-gtr-and-the-fashionable-driver-27-1920x1200.jpg"></a></td>
+    <td><a href="wallpapers/hatsune-miku-twin-ponytails-jl-1920x1200.jpg"><img src="wallpapers/hatsune-miku-twin-ponytails-jl-1920x1200.jpg" width="300" alt="hatsune-miku-twin-ponytails-jl-1920x1200.jpg"></a></td>
+    <td><a href="wallpapers/nanallynte.jpg"><img src="wallpapers/nanallynte.jpg" width="300" alt="nanallynte.jpg"></a></td>
+  </tr>
+  <tr>
+    <td><a href="wallpapers/nix.png"><img src="wallpapers/nix.png" width="300" alt="nix.png"></a></td>
+    <td><a href="wallpapers/origami_plane_art_128345_1920x1200.jpg"><img src="wallpapers/origami_plane_art_128345_1920x1200.jpg" width="300" alt="origami_plane_art_128345_1920x1200.jpg"></a></td>
+    <td><a href="wallpapers/panes.jpg"><img src="wallpapers/panes.jpg" width="300" alt="panes.jpg"></a></td>
+  </tr>
+  <tr>
+    <td><a href="wallpapers/pexels-irina-semenchik-257064265-17583073.jpg"><img src="wallpapers/pexels-irina-semenchik-257064265-17583073.jpg" width="300" alt="pexels-irina-semenchik-257064265-17583073.jpg"></a></td>
+    <td><a href="wallpapers/pexels-lauripoldre-24963115.jpg"><img src="wallpapers/pexels-lauripoldre-24963115.jpg" width="300" alt="pexels-lauripoldre-24963115.jpg"></a></td>
+    <td><a href="wallpapers/rose_flower_white_143143_1920x1200.jpg"><img src="wallpapers/rose_flower_white_143143_1920x1200.jpg" width="300" alt="rose_flower_white_143143_1920x1200.jpg"></a></td>
+  </tr>
+  <tr>
+    <td><a href="wallpapers/snowy-map.png"><img src="wallpapers/snowy-map.png" width="300" alt="snowy-map.png"></a></td>
+    <td><a href="wallpapers/stairs_dark_bw_126426_1920x1200.jpg"><img src="wallpapers/stairs_dark_bw_126426_1920x1200.jpg" width="300" alt="stairs_dark_bw_126426_1920x1200.jpg"></a></td>
+    <td><a href="wallpapers/swirls.jpg"><img src="wallpapers/swirls.jpg" width="300" alt="swirls.jpg"></a></td>
+  </tr>
+  <tr>
+    <td><a href="wallpapers/swirly-painting.jpg"><img src="wallpapers/swirly-painting.jpg" width="300" alt="swirly-painting.jpg"></a></td>
+    <td><a href="wallpapers/tank.jpg"><img src="wallpapers/tank.jpg" width="300" alt="tank.jpg"></a></td>
+    <td><a href="wallpapers/tree-stump.jpg"><img src="wallpapers/tree-stump.jpg" width="300" alt="tree-stump.jpg"></a></td>
+  </tr>
+  <tr>
+    <td><a href="wallpapers/tree.jpg"><img src="wallpapers/tree.jpg" width="300" alt="tree.jpg"></a></td>
+    <td><a href="wallpapers/vocaloid-hatsune-miku-anime-girl-3d-1920x1200.jpg"><img src="wallpapers/vocaloid-hatsune-miku-anime-girl-3d-1920x1200.jpg" width="300" alt="vocaloid-hatsune-miku-anime-girl-3d-1920x1200.jpg"></a></td>
+    <td><a href="wallpapers/wallhaven-5ykdq8.png"><img src="wallpapers/wallhaven-5ykdq8.png" width="300" alt="wallhaven-5ykdq8.png"></a></td>
+  </tr>
+  <tr>
+    <td><a href="wallpapers/wallhaven-ogylom.png"><img src="wallpapers/wallhaven-ogylom.png" width="300" alt="wallhaven-ogylom.png"></a></td>
+    <td><a href="wallpapers/wallpaperflare.com_wallpaper.jpg"><img src="wallpapers/wallpaperflare.com_wallpaper.jpg" width="300" alt="wallpaperflare.com_wallpaper.jpg"></a></td>
+    <td><a href="wallpapers/wp16058089-cartoon-miku-wallpapers.jpg"><img src="wallpapers/wp16058089-cartoon-miku-wallpapers.jpg" width="300" alt="wp16058089-cartoon-miku-wallpapers.jpg"></a></td>
+  </tr>
+</table>

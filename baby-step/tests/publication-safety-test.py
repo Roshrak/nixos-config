@@ -69,6 +69,9 @@ with tempfile.TemporaryDirectory(prefix="publication-safety-test.") as temp:
               "Private machine inventory without a token pattern\n", False)
     scan_case(scratch, "newline", "docs/bad\nname.md", "fixture\n", False)
     scan_case(scratch, "guide", "docs/current-guide.md", "Source guide\n", True)
+    scan_case(scratch, "root-installer-flake", "flake.nix", "{ outputs = _: {}; }\n", True)
+    scan_case(scratch, "root-installer-lock", "flake.lock", "{}\n", True)
+    scan_case(scratch, "private-installer-report", "baby-step/one-paste-installer-fixture/evidence.json", "{}\n", False)
     synthetic_token = "gh" + "p_" + "A" * 36
     scan_case(scratch, "token", "nixos/source.nix", synthetic_token + "\n", False, synthetic_token)
     synthetic_value = "not" + "-a-real-credential-123"
@@ -121,6 +124,8 @@ with tempfile.TemporaryDirectory(prefix="publication-safety-test.") as temp:
     run(REAL_GIT, "-C", str(repo), "push", "-q", "origin", "main")
     write(repo / "dotfiles/.hermes/agy_bridge.py", "# manifest-approved fixture helper\n")
     write(repo / "docs/current.md", "Updated source guide\n")
+    write(repo / "flake.nix", "{ outputs = _: {}; }\n")
+    write(repo / "flake.lock", "{}\n")
     bins = scratch / "bin"
     bins.mkdir()
     # Only URL inspection is mapped to the approved name. Fetch and push still
@@ -153,7 +158,7 @@ esac
     local = run(REAL_GIT, "-C", str(repo), "rev-parse", "HEAD").stdout.strip()
     remote = run(REAL_GIT, "--git-dir", str(bare), "rev-parse", "refs/heads/main").stdout.strip()
     assert local == remote
-    for path in ["docs/current.md", "dotfiles/.hermes/agy_bridge.py"]:
+    for path in ["docs/current.md", "dotfiles/.hermes/agy_bridge.py", "flake.nix", "flake.lock"]:
         run(REAL_GIT, "--git-dir", str(bare), "cat-file", "-e", "main:" + path)
     assert not update_marker.exists()
     assert str(Path("/run/current-system").resolve()) == active

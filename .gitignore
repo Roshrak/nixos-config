@@ -32,6 +32,7 @@ result-*
 /baby-step/full-audit-*/
 /baby-step/gen129-golden-recovery-*/
 /baby-step/script-install-github-*/
+/baby-step/one-paste-installer-*/
 
 # The custom-service manifest allows this helper's code only.
 /dotfiles/.hermes/*

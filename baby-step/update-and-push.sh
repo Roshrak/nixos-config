@@ -165,7 +165,7 @@ for required_path in nixos baby-step dotfiles scripts; do
         fatal "Required repository path is missing: $required_path"
 done
 publication_paths=(nixos baby-step dotfiles scripts docs README.md .gitignore)
-for optional_path in installation wallpapers .gitattributes; do
+for optional_path in installation wallpapers .gitattributes flake.nix flake.lock; do
     if [ -e "$BACKUP_REPO/$optional_path" ]; then
         publication_paths+=("$optional_path")
     fi
