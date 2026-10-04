@@ -25,8 +25,10 @@
         '';
       };
     in {
-      apps.${system}.install = { type = "app"; program = "${installer}/bin/tonelico-install"; };
-      apps.${system}.default = self.apps.${system}.install;
+      apps.${system} = {
+        install = { type = "app"; program = "${installer}/bin/tonelico-install"; };
+        default = self.apps.${system}.install;
+      };
       packages.${system}.default = installer;
     };
 }
